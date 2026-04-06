@@ -65,10 +65,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'white',
     borderRadius: 18,
     padding: 20,
-    shadowColor: '#2D1A14',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.06,
-    shadowRadius: 16,
+    boxShadow: '0px 4px 16px rgba(45, 26, 20, 0.06)',
     elevation: 3,
   },
   hero: {

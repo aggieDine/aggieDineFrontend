@@ -33,10 +33,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#500000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.18,
-    shadowRadius: 12,
+    boxShadow: '0px 4px 12px rgba(80, 0, 0, 0.18)',
     elevation: 4,
   },
   primaryButtonPressed: {

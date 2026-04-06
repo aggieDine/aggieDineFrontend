@@ -36,6 +36,8 @@ export default function MapScreen() {
   const [nextClass, setNextClass] = useState(null);
   const [suggestion, setSuggestion] = useState(null);
   const [recommendationMode, setRecommendationMode] = useState('schedule');
+  const nextClassLocation =
+    nextClass && CAMPUS_BUILDINGS[nextClass.building] ? CAMPUS_BUILDINGS[nextClass.building] : null;
 
   const loading = menuLoading && diningHalls.length === 0 || locationLoading;
 
@@ -137,6 +139,7 @@ export default function MapScreen() {
         diningHalls={diningHalls}
         suggestion={suggestion}
         nextClass={nextClass}
+        nextClassLocation={nextClassLocation}
         userLocation={userLocation}
         recommendationMode={recommendationMode}
         onRecommendationModeChange={setRecommendationMode}

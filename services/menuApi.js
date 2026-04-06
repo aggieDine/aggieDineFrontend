@@ -9,7 +9,7 @@ const API_BASE = 'https://nh19d71sp8.execute-api.us-east-2.amazonaws.com/menu';
  * @param {string} [params.period]   - e.g. "Breakfast", "Lunch", "Dinner"
  * @param {string[]} [params.filters] - e.g. ["Vegan", "Avoiding Gluten"]
  */
-export async function fetchMenuData(params = {}) {
+export async function fetchMenuData(params = {}, idToken) {
   const url = new URL(API_BASE);
 
   if (params.date) url.searchParams.set('date', params.date);
@@ -21,7 +21,12 @@ export async function fetchMenuData(params = {}) {
     }
   }
 
-  const res = await fetch(url.toString());
+  const headers = {};
+  if (idToken) {
+    headers['Authorization'] = idToken;
+  }
+
+  const res = await fetch(url.toString(), { headers });
   if (!res.ok) throw new Error(`Menu API error: ${res.status}`);
   return res.json();
 }

@@ -12,15 +12,13 @@ import {
   View,
 } from 'react-native';
 
-import { useAuth } from '../../auth/AuthContext';
-import { InfoBanner, PrimaryButton, SecondaryButton } from '../ui/action-controls';
+import { InfoBanner, PrimaryButton } from '../ui/action-controls';
 import { EmptyState, HeroHeader, SectionTitle, SurfaceCard } from '../ui/app-surface';
 
 const BUILDINGS = ['ZACH', 'MSC', 'BLOC', 'HELD', 'ILCB', 'SBISA', 'ETB', 'HRBB', 'MPHY'];
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 export default function ScheduleEditorPanel({ style }) {
-  const { signOut } = useAuth();
   const [classes, setClasses] = useState([]);
   const [className, setClassName] = useState('');
   const [building, setBuilding] = useState('');
@@ -141,11 +139,7 @@ export default function ScheduleEditorPanel({ style }) {
         eyebrow="Phone Web MVP"
         title="Build your class rhythm"
         subtitle="Add the classes that matter most and we'll use them to steer dining suggestions around campus."
-        trailing={
-          signOut ? (
-            <SecondaryButton label="Sign out" onPress={signOut} style={styles.signOutButton} />
-          ) : null
-        }
+        // this was where the signout button was RIP
       />
 
       <InfoBanner

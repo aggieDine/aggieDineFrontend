@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 
+import { useAuth } from '../auth/AuthContext';
 import { fetchMenuData } from '../services/menuApi';
 import { transformS3Data } from '../services/transformMenu';
 import { DINING_HALLS } from './dining';
@@ -10,6 +11,7 @@ const CACHE_KEY = 'cachedMenuData';
 const DiningDataContext = createContext(undefined);
 
 export function DiningDataProvider({ children }) {
+  const { user } = useAuth();
   const [diningHalls, setDiningHalls] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -33,7 +35,8 @@ export function DiningDataProvider({ children }) {
 
     // 2. Fetch fresh data from the menu API
     try {
-      const apiData = await fetchMenuData();
+      const idToken = await AsyncStorage.getItem('idToken');
+      const apiData = await fetchMenuData({}, idToken);
       if (apiData) {
         const transformed = transformS3Data(apiData);
         setDiningHalls(transformed);
@@ -61,8 +64,8 @@ export function DiningDataProvider({ children }) {
   }, []);
 
   useEffect(() => {
-    loadData();
-  }, [loadData]);
+    if (user) loadData();
+  }, [user, loadData]);
 
   const getDiningHallById = useCallback(
     (id) => diningHalls.find((hall) => hall.id === id) ?? null,

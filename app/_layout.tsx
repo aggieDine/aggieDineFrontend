@@ -1,16 +1,57 @@
 import { Stack, useRouter, useSegments } from 'expo-router';
-import { AuthProvider, useAuth } from '../auth/AuthContext';
+import { AuthProvider, useAuth, COGNITO_CONFIG } from '../auth/AuthContext';
 import { DiningDataProvider } from '../data/DiningDataContext';
-import { useEffect } from 'react';
-import { View, ActivityIndicator } from 'react-native';
+import { useEffect, useState } from 'react';
+import { View, ActivityIndicator, Platform } from 'react-native';
+import * as WebBrowser from 'expo-web-browser';
+
+WebBrowser.maybeCompleteAuthSession();
 
 function RootLayoutNav() {
-  const { user, isLoading } = useAuth();
+  const { user, isLoading, signInWithToken } = useAuth();
   const segments = useSegments();
   const router = useRouter();
+  const [handlingCode, setHandlingCode] = useState(false);
+
+  // On web: intercept auth code from URL before the auth guard redirects away
+  useEffect(() => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const code = params.get('code');
+      if (code) {
+        setHandlingCode(true);
+        window.history.replaceState({}, '', window.location.pathname);
+
+        const redirectUri = window.location.origin;
+        fetch(`${COGNITO_CONFIG.domain}/oauth2/token`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body:
+            `grant_type=authorization_code` +
+            `&client_id=${COGNITO_CONFIG.clientId}` +
+            `&code=${code}` +
+            `&redirect_uri=${encodeURIComponent(redirectUri)}`,
+        })
+          .then((res) => res.json())
+          .then(async (tokens) => {
+            if (tokens.id_token) {
+              await signInWithToken(tokens.id_token);
+            } else {
+              throw new Error(tokens.error || 'No ID token received');
+            }
+          })
+          .catch((err) => {
+            if (typeof window !== 'undefined') {
+              window.alert(err.message || 'Login failed');
+            }
+          })
+          .finally(() => setHandlingCode(false));
+      }
+    }
+  }, []);
 
   useEffect(() => {
-    if (isLoading) return;
+    if (isLoading || handlingCode) return;
 
     const inAuthGroup = segments[0] === '(auth)';
 
@@ -19,7 +60,7 @@ function RootLayoutNav() {
     } else if (user && inAuthGroup) {
       router.replace('/');
     }
-  }, [user, isLoading, segments]);
+  }, [user, isLoading, handlingCode, segments]);
 
   if (isLoading) {
     return (

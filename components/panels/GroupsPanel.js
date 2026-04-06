@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { useEffect, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
@@ -17,6 +18,11 @@ const DINING_SPOTS = [
 ];
 
 const STORAGE_KEY = 'groupInvites';
+// Date limit for the event creation 
+const TODAY = new Date();
+const END_OF_NEXT_WEEK = new Date();
+const daysUntilNextSaturday = 13 - TODAY.getDay();
+END_OF_NEXT_WEEK.setDate(TODAY.getDate() + daysUntilNextSaturday);
 
 export default function GroupsPanel({ style }) {
   const [invites, setInvites] = useState([]);
@@ -28,6 +34,10 @@ export default function GroupsPanel({ style }) {
   const [friendName, setFriendName] = useState('');
   const [error, setError] = useState('');
   const [showRestaurantPicker, setShowRestaurantPicker] = useState(false);
+  const [tempDate, setTempDate] = useState(new Date());
+  const [tempTime, setTempTime] = useState(new Date());
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showTimePicker, setShowTimePicker] = useState(false);
 
   useEffect(() => {
     loadInvites();
@@ -39,6 +49,26 @@ export default function GroupsPanel({ style }) {
       if (stored) setInvites(JSON.parse(stored));
     } catch (e) {
       console.error(e);
+    }
+  };
+
+  const onDateChange = (_event, selectedDate) => {
+    if (Platform.OS === 'android') setShowDatePicker(false);
+    if (selectedDate) {
+      setTempDate(selectedDate);
+      const month = (selectedDate.getMonth() + 1).toString().padStart(2, '0');
+      const day = selectedDate.getDate().toString().padStart(2, '0');
+      setDate(`${month}/${day}`);
+    }
+  };
+
+  const onTimeChange = (_event, selectedDate) => {
+    if (Platform.OS === 'android') setShowTimePicker(false);
+    if (selectedDate) {
+      setTempTime(selectedDate);
+      const hours = selectedDate.getHours().toString().padStart(2, '0');
+      const minutes = selectedDate.getMinutes().toString().padStart(2, '0');
+      setTime(`${hours}:${minutes}`);
     }
   };
 
@@ -66,7 +96,7 @@ export default function GroupsPanel({ style }) {
     }
 
     const newInvite = {
-      id: Date.now().toString(),
+      id: Date.now().toString(), // Need new id generating logic
       restaurant: restaurant.trim(),
       date: date.trim(),
       time: time.trim(),
@@ -185,27 +215,65 @@ export default function GroupsPanel({ style }) {
           <View style={styles.row}>
             <View style={styles.halfCol}>
               <Text style={styles.label}>Date</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="MM/DD"
-                placeholderTextColor="#999"
-                value={date}
-                onChangeText={setDate}
-                maxLength={5}
-              />
+              {Platform.OS === 'web' ? (
+                <input
+                  type="date"
+                  min={TODAY.toISOString().split('T')[0]}
+                  max={END_OF_NEXT_WEEK.toISOString().split('T')[0]}
+                  value={date ? `2026-${date.replace('/', '-')}` : ''}
+                  onChange={(e) => {
+                    const parts = e.target.value.split('-');
+                    if (parts.length === 3) setDate(`${parts[1]}/${parts[2]}`);
+                  }}
+                  style={styles.webInput}
+                />
+              ) : (
+                <View>
+                  <Pressable style={styles.input} onPress={() => setShowDatePicker(true)}>
+                    <Text style={[styles.inputText, !date && styles.placeholderText]}>
+                      {date || 'MM/DD'}
+                    </Text>
+                  </Pressable>
+                  {showDatePicker && (
+                    <DateTimePicker
+                      value={tempDate}
+                      mode="date"
+                      display="default"
+                      minimumDate={TODAY}
+                      maximumDate={END_OF_NEXT_WEEK}
+                      onChange={onDateChange}
+                    />
+                  )}
+                </View>
+              )}
             </View>
 
             <View style={styles.halfCol}>
               <Text style={styles.label}>Time</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="12:30"
-                placeholderTextColor="#999"
-                value={time}
-                onChangeText={setTime}
-                maxLength={5}
-                keyboardType={Platform.OS === 'web' ? 'default' : 'numeric'}
-              />
+              {Platform.OS === 'web' ? (
+                <input
+                  type="time"
+                  value={time}
+                  onChange={(e) => setTime(e.target.value)}
+                  style={styles.webInput}
+                />
+              ) : (
+                <View>
+                  <Pressable style={styles.input} onPress={() => setShowTimePicker(true)}>
+                    <Text style={[styles.inputText, !time && styles.placeholderText]}>
+                      {time || '12:30'}
+                    </Text>
+                  </Pressable>
+                  {showTimePicker && (
+                    <DateTimePicker
+                      value={tempTime}
+                      mode="time"
+                      display="default"
+                      onChange={onTimeChange}
+                    />
+                  )}
+                </View>
+              )}
             </View>
           </View>
 
@@ -342,6 +410,25 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E8E2DA',
     color: '#333',
+  },
+  inputText: {
+    color: '#333',
+    fontSize: 15,
+  },
+  placeholderText: {
+    color: '#999',
+  },
+  webInput: {
+    backgroundColor: '#F8F5F0',
+    padding: '14px',
+    borderRadius: '12px',
+    fontSize: '15px',
+    border: '1px solid #E8E2DA',
+    color: '#333',
+    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
+    width: '100%',
+    boxSizing: 'border-box',
+    outline: 'none',
   },
   textArea: {
     minHeight: 88,

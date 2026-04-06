@@ -67,12 +67,15 @@ export function transformS3Data(s3Json) {
       };
     });
 
+    // A location is open if it has at least one period with menu items
+    const hasItems = periods.some((p) => p.stations.some((s) => s.items.length > 0));
+
     results.push({
       id: loc.id,
       name: loc.name,
       category: metadata.category,
       coordinates: metadata.coordinates,
-      status: metadata.status,
+      status: { isOpen: hasItems },
       description: metadata.description,
       hours: metadata.hours,
       periods,

@@ -6,6 +6,9 @@
 # dependencies
 node_modules/
 
+# Python virtual env
+.venv/
+
 # Expo
 .expo/
 dist/

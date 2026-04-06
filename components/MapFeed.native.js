@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -15,6 +16,7 @@ import MapView, { Marker } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import GroupsPanel from './panels/GroupsPanel';
+import MePanel from './panels/MePanel';
 import ScheduleEditorPanel from './panels/ScheduleEditorPanel';
 
 const MODE_OPTIONS = [
@@ -29,7 +31,12 @@ const PAGE_TABS = [
   { key: 'me', label: 'Me' },
 ];
 
-
+const GROUP_INVITES_STORAGE_KEY = 'groupInvites';
+const MY_DAY_PAGE_INDEX = 1;
+const SOCIAL_PAGE_INDEX = 2;
+const ME_PAGE_INDEX = 3;
+const SOCIAL_PIN_COLOR = '#D98A2B';
+const MY_DAY_MARKER_LIMIT = 4;
 
 function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max);
@@ -57,6 +64,25 @@ function formatDistanceMiles(distanceKm) {
 
 function getStatusLabel(hall) {
   return hall?.status?.isOpen ? 'Open Now' : 'Closed';
+}
+
+function formatInviteStatus(status) {
+  if (!status) return 'Pending';
+  return status.charAt(0).toUpperCase() + status.slice(1);
+}
+
+function normalizeVenueName(value) {
+  return value?.trim().toLowerCase() ?? '';
+}
+
+function dedupeHalls(halls) {
+  const seen = new Set();
+
+  return halls.filter((hall) => {
+    if (!hall?.id || seen.has(hall.id)) return false;
+    seen.add(hall.id);
+    return true;
+  });
 }
 
 function getSheetCopy({ selectedHall, suggestion, nextClass, recommendationMode }) {
@@ -88,6 +114,7 @@ export default function MapFeed({
   diningHalls = [],
   suggestion,
   nextClass,
+  nextClassLocation,
   userLocation,
   recommendationMode = 'schedule',
   onRecommendationModeChange,
@@ -103,6 +130,7 @@ export default function MapFeed({
 
   const [selectedHall, setSelectedHall] = useState(null);
   const [activePageIndex, setActivePageIndex] = useState(0);
+  const [groupInvites, setGroupInvites] = useState([]);
 
   const bottomOffset = Math.max(insets.bottom, 10) + 12;
   const sheetHeight = Math.min(Math.max(height * 0.68, 320), 520);
@@ -145,6 +173,44 @@ export default function MapFeed({
   useEffect(() => {
     snapTo(selectedHall ? 'expanded' : 'medium');
   }, [selectedHall, snapTo]);
+
+  const loadGroupInvites = useCallback(async () => {
+    try {
+      const stored = await AsyncStorage.getItem(GROUP_INVITES_STORAGE_KEY);
+      setGroupInvites(stored ? JSON.parse(stored) : []);
+    } catch (error) {
+      console.error('Failed to load group invites for map markers', error);
+    }
+  }, []);
+
+  const saveGroupInvites = useCallback(async (updatedInvites) => {
+    try {
+      setGroupInvites(updatedInvites);
+      await AsyncStorage.setItem(GROUP_INVITES_STORAGE_KEY, JSON.stringify(updatedInvites));
+    } catch (error) {
+      console.error('Failed to save group invites for map markers', error);
+    }
+  }, []);
+
+  const updateInviteStatus = useCallback(
+    async (inviteId, nextStatus) => {
+      const updatedInvites = groupInvites.map((invite) =>
+        invite.id === inviteId ? { ...invite, status: nextStatus } : invite
+      );
+      await saveGroupInvites(updatedInvites);
+    },
+    [groupInvites, saveGroupInvites]
+  );
+
+  useEffect(() => {
+    loadGroupInvites();
+  }, [loadGroupInvites]);
+
+  useEffect(() => {
+    if (activePageIndex === SOCIAL_PAGE_INDEX) {
+      loadGroupInvites();
+    }
+  }, [activePageIndex, loadGroupInvites]);
 
   const panResponder = useMemo(
     () =>
@@ -213,6 +279,69 @@ export default function MapFeed({
     });
   }, [diningHalls, suggestion, userLocation]);
 
+  const inviteCounts = useMemo(() => {
+    const counts = {};
+    groupInvites.forEach((invite) => {
+      if (invite?.status === 'pending' || invite?.status === 'accepted') {
+        const name = normalizeVenueName(invite.restaurant);
+        counts[name] = (counts[name] || 0) + 1;
+      }
+    });
+    return counts;
+  }, [groupInvites]);
+
+  const activeInviteRestaurants = useMemo(
+    () => new Set(Object.keys(inviteCounts)),
+    [inviteCounts]
+  );
+
+  const markerDiningHalls = useMemo(() => {
+    const hallsWithCoords = diningHalls.filter((hall) => hall.coordinates?.latitude);
+    const openHalls = hallsWithCoords.filter((hall) => hall.status?.isOpen);
+    const decorateHall = (hall) => {
+      const normalized = normalizeVenueName(hall.name);
+      return {
+        ...hall,
+        hasActiveInvite: activeInviteRestaurants.has(normalized),
+        inviteCount: inviteCounts[normalized] || 0,
+      };
+    };
+
+    if (activePageIndex === MY_DAY_PAGE_INDEX && nextClassLocation) {
+      const biasedHalls = [...openHalls]
+        .sort(
+          (a, b) =>
+            getDistanceKm(
+              nextClassLocation.latitude,
+              nextClassLocation.longitude,
+              a.coordinates.latitude,
+              a.coordinates.longitude
+            ) -
+            getDistanceKm(
+              nextClassLocation.latitude,
+              nextClassLocation.longitude,
+              b.coordinates.latitude,
+              b.coordinates.longitude
+            )
+        )
+        .slice(0, MY_DAY_MARKER_LIMIT);
+
+      return dedupeHalls(selectedHall ? [...biasedHalls, selectedHall] : biasedHalls).map(decorateHall);
+    }
+
+    if (activePageIndex === SOCIAL_PAGE_INDEX) {
+      const inviteHalls = hallsWithCoords.filter((hall) =>
+        activeInviteRestaurants.has(normalizeVenueName(hall.name))
+      );
+
+      return dedupeHalls(
+        selectedHall ? [...openHalls, ...inviteHalls, selectedHall] : [...openHalls, ...inviteHalls]
+      ).map(decorateHall);
+    }
+
+    return dedupeHalls(selectedHall ? [...openHalls, selectedHall] : openHalls).map(decorateHall);
+  }, [activeInviteRestaurants, activePageIndex, diningHalls, inviteCounts, nextClassLocation, selectedHall]);
+
   const sheetCopy = getSheetCopy({
     selectedHall,
     suggestion,
@@ -220,6 +349,19 @@ export default function MapFeed({
     recommendationMode,
   });
   const activeHall = selectedHall ?? suggestion;
+  const selectedHallHasActiveInvite = activeInviteRestaurants.has(normalizeVenueName(selectedHall?.name));
+  const selectedHallInvites = useMemo(() => {
+    const selectedName = normalizeVenueName(selectedHall?.name);
+    if (!selectedName) return [];
+
+    return groupInvites
+      .filter(
+        (invite) =>
+          normalizeVenueName(invite.restaurant) === selectedName &&
+          (invite?.status === 'pending' || invite?.status === 'accepted')
+      )
+      .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+  }, [groupInvites, selectedHall]);
   const activeDistance =
     activeHall?.coordinates && userLocation
       ? formatDistanceMiles(
@@ -231,6 +373,34 @@ export default function MapFeed({
           )
         )
       : null;
+  const focusedDetailCopy =
+    activePageIndex === MY_DAY_PAGE_INDEX
+      ? getSheetCopy({
+          selectedHall,
+          suggestion,
+          nextClass,
+          recommendationMode: 'schedule',
+        })
+      : activePageIndex === SOCIAL_PAGE_INDEX
+        ? {
+            eyebrow: selectedHallHasActiveInvite ? 'Active Invite Spot' : 'Social Spot',
+            title: selectedHall?.name ?? 'Dining Spot',
+            body: selectedHallHasActiveInvite
+              ? 'This dining spot is tied to active invite activity.'
+              : 'Viewing details for a dining spot you can use for group plans.',
+          }
+        : activePageIndex === ME_PAGE_INDEX
+          ? {
+              eyebrow: 'Selected Place',
+              title: selectedHall?.name ?? 'Dining Spot',
+              body: 'Viewing details for this dining spot from your personal map.',
+            }
+          : getSheetCopy({
+              selectedHall,
+              suggestion,
+              nextClass,
+              recommendationMode: 'location',
+            });
 
   const recenterOnUser = () => {
     if (!userLocation || !mapRef.current) return;
@@ -246,9 +416,34 @@ export default function MapFeed({
     );
   };
 
+  const minimizeSheet = useCallback(() => {
+    snapTo('collapsed');
+  }, [snapTo]);
+
+  const focusMapOnHall = useCallback((hall) => {
+    if (!hall?.coordinates || !mapRef.current) return;
+
+    mapRef.current.animateToRegion(
+      {
+        latitude: hall.coordinates.latitude,
+        longitude: hall.coordinates.longitude,
+        latitudeDelta: 0.008,
+        longitudeDelta: 0.008,
+      },
+      350
+    );
+  }, []);
+
   const selectHall = useCallback((hall) => {
     setSelectedHall(hall);
-  }, []);
+    focusMapOnHall(hall);
+  }, [focusMapOnHall]);
+
+  useEffect(() => {
+    if (selectedHall || !pagerRef.current) return;
+
+    pagerRef.current.scrollTo({ x: pagerWidth * activePageIndex, animated: false });
+  }, [activePageIndex, pagerWidth, selectedHall]);
 
   const openDetail = useCallback((hall) => {
     router.push(`/restaurant/${hall.id}`);
@@ -271,18 +466,43 @@ export default function MapFeed({
           { featureType: 'poi', stylers: [{ visibility: 'off' }] },
           { featureType: 'transit', stylers: [{ visibility: 'off' }] },
         ]}>
-        {diningHalls.map((hall) => {
+        {markerDiningHalls.map((hall) => {
           if (!hall.coordinates?.latitude) return null;
           const isSuggested = suggestion && hall.id === suggestion.id;
-          const pinColor = isSuggested ? '#2F6FED' : hall.status?.isOpen ? '#22A45D' : '#D64545';
+          const inviteCount = hall.inviteCount || 0;
+          const formattedCount = inviteCount >= 100 ? '99+' : inviteCount.toString();
+          const isInviteHighlighted = activePageIndex === SOCIAL_PAGE_INDEX && inviteCount > 0;
+          const pinColor = isInviteHighlighted
+            ? SOCIAL_PIN_COLOR
+            : isSuggested
+              ? '#2F6FED'
+              : hall.status?.isOpen
+                ? '#22A45D'
+                : '#D64545';
+
+          const isSelected = selectedHall?.id === hall.id;
 
           return (
             <Marker
+              zIndex={isSelected ? 2 : 1}
               key={hall.id}
               coordinate={hall.coordinates}
-              pinColor={pinColor}
-              onPress={() => selectHall(hall)}
-            />
+              onPress={() => selectHall(hall)}>
+              <View style={[styles.markerContainer, isSelected && styles.markerSelected]}>
+                <Ionicons
+                  name="location"
+                  size={38}
+                  color={isSelected ? '#500000' : pinColor}
+                  style={styles.markerIcon}
+                />
+                <View style={styles.pinDot} />
+                {inviteCount > 0 && (
+                  <View style={[styles.badge, isInviteHighlighted && styles.badgeSocial]}>
+                    <Text style={styles.badgeText}>{formattedCount}</Text>
+                  </View>
+                )}
+              </View>
+            </Marker>
           );
         })}
       </MapView>
@@ -306,196 +526,296 @@ export default function MapFeed({
           <View style={styles.grabberWrap} {...panResponder.panHandlers}>
             <View style={styles.grabber} />
           </View>
-          <View style={styles.pageTabsWrap}>
-            {PAGE_TABS.map((tab, index) => {
-              const selected = activePageIndex === index;
-              return (
-                <Pressable
-                  key={tab.key}
-                  style={[styles.pageTabButton, selected && styles.pageTabButtonActive]}
-                  onPress={() => {
-                    setActivePageIndex(index);
-                    if (pagerRef.current) {
-                      pagerRef.current.scrollTo({ x: pagerWidth * index, animated: true });
-                    }
-                  }}>
-                  <Text style={[styles.pageTabLabel, selected && styles.pageTabLabelActive]}>
-                    {tab.label}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-        </View>
-
-        <ScrollView
-          ref={pagerRef}
-          horizontal
-          pagingEnabled
-          showsHorizontalScrollIndicator={false}
-          onMomentumScrollEnd={(e) => {
-            const page = Math.round(e.nativeEvent.contentOffset.x / pagerWidth);
-            setActivePageIndex(page);
-          }}
-          style={styles.pagerScroll}>
-          {/* Page 0: Explore */}
-          <ScrollView
-            style={{ width: pagerWidth }}
-            contentContainerStyle={styles.sheetContent}
-            showsVerticalScrollIndicator={false}
-            nestedScrollEnabled>
-            <View style={styles.modeSection}>
-              <Text style={styles.modeSectionLabel}>Recommendation</Text>
-              <View style={styles.segmentedWrap}>
-                {MODE_OPTIONS.map((option) => {
-                  const selected = recommendationMode === option.value;
-                  return (
-                    <Pressable
-                      key={option.value}
-                      style={[styles.segmentButton, selected && styles.segmentButtonActive]}
-                      onPress={() => onRecommendationModeChange?.(option.value)}>
-                      <Text style={[styles.segmentLabel, selected && styles.segmentLabelActive]}>
-                        {option.label}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-            </View>
-            <View style={styles.heroBlock}>
-              <Text style={styles.eyebrow}>{sheetCopy.eyebrow}</Text>
-              <Text style={styles.title}>{sheetCopy.title}</Text>
-              <Text style={styles.body}>{sheetCopy.body}</Text>
-            </View>
-
-            {activeHall ? (
-              <View style={styles.primaryCard}>
-                <View style={styles.primaryHeader}>
-                  <View style={styles.primaryTitleWrap}>
-                    <Text style={styles.primaryTitle}>{activeHall.name}</Text>
-                    <Text style={styles.primaryMeta}>
-                      {activeHall.category ?? 'Dining Spot'} | {getStatusLabel(activeHall)}
-                    </Text>
-                  </View>
-                  {selectedHall ? (
-                    <Pressable style={styles.clearButton} onPress={() => setSelectedHall(null)}>
-                      <Ionicons name="close" size={16} color="#6B625D" />
-                    </Pressable>
-                  ) : (
-                    <View style={styles.recommendedBadge}>
-                      <Text style={styles.recommendedBadgeText}>Recommended</Text>
-                    </View>
-                  )}
-                </View>
-
-                {activeDistance ? (
-                  <View style={styles.infoRow}>
-                    <Ionicons name="walk-outline" size={16} color="#7A6E69" />
-                    <Text style={styles.infoText}>{activeDistance}</Text>
-                  </View>
-                ) : null}
-
-                {recommendationMode === 'schedule' && nextClass ? (
-                  <View style={styles.infoRow}>
-                    <Ionicons name="school-outline" size={16} color="#7A6E69" />
-                    <Text style={styles.infoText}>Planning around {nextClass.building}</Text>
-                  </View>
-                ) : (
-                  <View style={styles.infoRow}>
-                    <Ionicons name="locate-outline" size={16} color="#7A6E69" />
-                    <Text style={styles.infoText}>Anchored to your live location</Text>
-                  </View>
-                )}
-              </View>
-            ) : null}
-
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Dining Places</Text>
-              <Text style={styles.sectionCaption}>Tap a restaurant to focus it on the sheet.</Text>
-            </View>
-
-            <View style={styles.placeList}>
-              {places.map((hall) => {
-                const selected = hall.id === selectedHall?.id;
-                const recommended = hall.id === suggestion?.id;
-                const distance =
-                  userLocation && hall.coordinates
-                    ? formatDistanceMiles(
-                        getDistanceKm(
-                          userLocation.latitude,
-                          userLocation.longitude,
-                          hall.coordinates.latitude,
-                          hall.coordinates.longitude
-                        )
-                      )
-                    : null;
-
+          <View style={styles.sheetControlsRow}>
+            <View style={styles.pageTabsWrap}>
+              {PAGE_TABS.map((tab, index) => {
+                const selected = activePageIndex === index;
                 return (
                   <Pressable
-                    key={hall.id}
-                    style={[styles.placeRow, selected && styles.placeRowSelected]}
-                    onPress={() => openDetail(hall)}>
-                    <View style={styles.placeRowMain}>
-                      <View style={styles.placeIconWrap}>
-                        <Ionicons
-                          name={hall.status?.isOpen ? 'restaurant' : 'restaurant-outline'}
-                          size={18}
-                          color={recommended ? '#2F6FED' : hall.status?.isOpen ? '#1B8B4B' : '#B44A4A'}
-                        />
-                      </View>
-                      <View style={styles.placeCopy}>
-                        <View style={styles.placeTitleRow}>
-                          <Text style={styles.placeName}>{hall.name}</Text>
-                          {recommended ? (
-                            <View style={styles.inlineBadge}>
-                              <Text style={styles.inlineBadgeText}>For you</Text>
-                            </View>
-                          ) : null}
-                        </View>
-                        <Text style={styles.placeMeta}>
-                          {hall.category ?? 'Dining Spot'} | {getStatusLabel(hall)}
-                          {distance ? ` | ${distance}` : ''}
-                        </Text>
-                      </View>
-                    </View>
-                    <Ionicons name="chevron-forward" size={16} color="#9A8F89" />
+                    key={tab.key}
+                    style={[styles.pageTabButton, selected && styles.pageTabButtonActive]}
+                    onPress={() => {
+                      if (selectedHall) return;
+                      setActivePageIndex(index);
+                      if (pagerRef.current) {
+                        pagerRef.current.scrollTo({ x: pagerWidth * index, animated: true });
+                      }
+                    }}>
+                    <Text style={[styles.pageTabLabel, selected && styles.pageTabLabelActive]}>
+                      {tab.label}
+                    </Text>
                   </Pressable>
                 );
               })}
             </View>
-          </ScrollView>
+            <Pressable style={styles.minimizeButton} onPress={minimizeSheet}>
+              <Text style={styles.minimizeButtonText}>Minimize</Text>
+            </Pressable>
+          </View>
+        </View>
 
-          {/* Page 1: My Day */}
+        {selectedHall ? (
           <ScrollView
-            style={{ width: pagerWidth }}
-            contentContainerStyle={styles.sheetContent}
-            showsVerticalScrollIndicator={false}
-            nestedScrollEnabled>
-            <ScheduleEditorPanel />
-          </ScrollView>
-
-          {/* Page 2: Social */}
-          <ScrollView
-            style={{ width: pagerWidth }}
-            contentContainerStyle={styles.sheetContent}
-            showsVerticalScrollIndicator={false}
-            nestedScrollEnabled>
-            <GroupsPanel />
-          </ScrollView>
-
-          {/* Page 3: Me */}
-          <ScrollView
-            style={{ width: pagerWidth }}
-            contentContainerStyle={styles.sheetContent}
+            contentContainerStyle={styles.focusedSheetContent}
             showsVerticalScrollIndicator={false}
             nestedScrollEnabled>
             <View style={styles.heroBlock}>
-              <Text style={styles.eyebrow}>Profile</Text>
-              <Text style={styles.title}>Me</Text>
-              <Text style={styles.body}>Your profile, preferences, and settings will live here.</Text>
+              <Text style={styles.eyebrow}>{focusedDetailCopy.eyebrow}</Text>
+              <Text style={styles.title}>{focusedDetailCopy.title}</Text>
+              <Text style={styles.body}>{focusedDetailCopy.body}</Text>
             </View>
+
+            <View style={styles.focusedPrimaryCard}>
+              <View style={styles.primaryHeader}>
+                <View style={styles.primaryTitleWrap}>
+                  <Text style={styles.primaryTitle}>{selectedHall.name}</Text>
+                  <Text style={styles.primaryMeta}>
+                    {selectedHall.category ?? 'Dining Spot'} | {getStatusLabel(selectedHall)}
+                  </Text>
+                </View>
+                <Pressable style={styles.clearButton} onPress={() => setSelectedHall(null)}>
+                  <Ionicons name="close" size={16} color="#6B625D" />
+                </Pressable>
+              </View>
+
+              {activeDistance ? (
+                <View style={styles.infoRow}>
+                  <Ionicons name="walk-outline" size={16} color="#7A6E69" />
+                  <Text style={styles.infoText}>{activeDistance}</Text>
+                </View>
+              ) : null}
+
+              {activePageIndex === MY_DAY_PAGE_INDEX && nextClass ? (
+                <View style={styles.infoRow}>
+                  <Ionicons name="school-outline" size={16} color="#7A6E69" />
+                  <Text style={styles.infoText}>Planning around {nextClass.building}</Text>
+                </View>
+              ) : activePageIndex === SOCIAL_PAGE_INDEX ? (
+                <View style={styles.infoRow}>
+                  <Ionicons name="people-outline" size={16} color="#7A6E69" />
+                  <Text style={styles.infoText}>
+                    {selectedHallHasActiveInvite
+                      ? 'This spot has active invite activity.'
+                      : 'Open for future group invites.'}
+                  </Text>
+                </View>
+              ) : activePageIndex === ME_PAGE_INDEX ? (
+                <View style={styles.infoRow}>
+                  <Ionicons name="person-outline" size={16} color="#7A6E69" />
+                  <Text style={styles.infoText}>Viewing this spot from your personal dining view.</Text>
+                </View>
+              ) : (
+                <View style={styles.infoRow}>
+                  <Ionicons name="locate-outline" size={16} color="#7A6E69" />
+                  <Text style={styles.infoText}>Anchored to your live location</Text>
+                </View>
+              )}
+            </View>
+
+            {selectedHallInvites.length > 0 ? (
+              <View style={styles.inviteCard}>
+                <View style={styles.inviteHeader}>
+                  <Text style={styles.inviteEyebrow}>Invite Activity</Text>
+                  <View style={styles.inviteCountBadge}>
+                    <Text style={styles.inviteCountBadgeText}>{selectedHallInvites.length} active</Text>
+                  </View>
+                </View>
+
+                <View style={styles.inviteList}>
+                  {selectedHallInvites.map((invite) => (
+                    <View key={invite.id} style={styles.inviteRow}>
+                      <View style={styles.inviteTopLine}>
+                        <Text style={styles.inviteName}>{invite.friendName || 'Open Invite'}</Text>
+                        <View style={styles.inviteStatusBadge}>
+                          <Text style={styles.inviteStatusText}>{formatInviteStatus(invite.status)}</Text>
+                        </View>
+                      </View>
+                      <Text style={styles.inviteMeta}>
+                        {invite.date || 'TBD'} | {invite.time || 'TBD'}
+                      </Text>
+                      {invite.message ? (
+                        <Text style={styles.inviteMessage}>{invite.message}</Text>
+                      ) : null}
+                      {invite.status === 'pending' ? (
+                        <View style={styles.inviteActions}>
+                          <Pressable
+                            style={styles.acceptInviteButton}
+                            onPress={() => updateInviteStatus(invite.id, 'accepted')}>
+                            <Text style={styles.acceptInviteButtonText}>Accept</Text>
+                          </Pressable>
+                          <Pressable
+                            style={styles.declineInviteButton}
+                            onPress={() => updateInviteStatus(invite.id, 'declined')}>
+                            <Text style={styles.declineInviteButtonText}>Decline</Text>
+                          </Pressable>
+                        </View>
+                      ) : null}
+                    </View>
+                  ))}
+                </View>
+              </View>
+            ) : null}
           </ScrollView>
-        </ScrollView>
+        ) : (
+          <ScrollView
+            ref={pagerRef}
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            onMomentumScrollEnd={(e) => {
+              const page = Math.round(e.nativeEvent.contentOffset.x / pagerWidth);
+              setActivePageIndex(page);
+            }}
+            style={styles.pagerScroll}>
+            {/* Page 0: Explore */}
+            <ScrollView
+              style={{ width: pagerWidth }}
+              contentContainerStyle={styles.sheetContent}
+              showsVerticalScrollIndicator={false}
+              nestedScrollEnabled>
+              <View style={styles.modeSection}>
+                <Text style={styles.modeSectionLabel}>Recommendation</Text>
+                <View style={styles.segmentedWrap}>
+                  {MODE_OPTIONS.map((option) => {
+                    const selected = recommendationMode === option.value;
+                    return (
+                      <Pressable
+                        key={option.value}
+                        style={[styles.segmentButton, selected && styles.segmentButtonActive]}
+                        onPress={() => onRecommendationModeChange?.(option.value)}>
+                        <Text style={[styles.segmentLabel, selected && styles.segmentLabelActive]}>
+                          {option.label}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </View>
+              <View style={styles.heroBlock}>
+                <Text style={styles.eyebrow}>{sheetCopy.eyebrow}</Text>
+                <Text style={styles.title}>{sheetCopy.title}</Text>
+                <Text style={styles.body}>{sheetCopy.body}</Text>
+              </View>
+
+              {activeHall ? (
+                <View style={styles.primaryCard}>
+                  <View style={styles.primaryHeader}>
+                    <View style={styles.primaryTitleWrap}>
+                      <Text style={styles.primaryTitle}>{activeHall.name}</Text>
+                      <Text style={styles.primaryMeta}>
+                        {activeHall.category ?? 'Dining Spot'} | {getStatusLabel(activeHall)}
+                      </Text>
+                    </View>
+                    <View style={styles.recommendedBadge}>
+                      <Text style={styles.recommendedBadgeText}>Recommended</Text>
+                    </View>
+                  </View>
+
+                  {activeDistance ? (
+                    <View style={styles.infoRow}>
+                      <Ionicons name="walk-outline" size={16} color="#7A6E69" />
+                      <Text style={styles.infoText}>{activeDistance}</Text>
+                    </View>
+                  ) : null}
+
+                  {recommendationMode === 'schedule' && nextClass ? (
+                    <View style={styles.infoRow}>
+                      <Ionicons name="school-outline" size={16} color="#7A6E69" />
+                      <Text style={styles.infoText}>Planning around {nextClass.building}</Text>
+                    </View>
+                  ) : (
+                    <View style={styles.infoRow}>
+                      <Ionicons name="locate-outline" size={16} color="#7A6E69" />
+                      <Text style={styles.infoText}>Anchored to your live location</Text>
+                    </View>
+                  )}
+                </View>
+              ) : null}
+
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>Dining Places</Text>
+                <Text style={styles.sectionCaption}>Tap a restaurant to focus it on the sheet.</Text>
+              </View>
+
+              <View style={styles.placeList}>
+                {places.map((hall) => {
+                  const selected = hall.id === selectedHall?.id;
+                  const recommended = hall.id === suggestion?.id;
+                  const distance =
+                    userLocation && hall.coordinates
+                      ? formatDistanceMiles(
+                          getDistanceKm(
+                            userLocation.latitude,
+                            userLocation.longitude,
+                            hall.coordinates.latitude,
+                            hall.coordinates.longitude
+                          )
+                        )
+                      : null;
+
+                  return (
+                    <Pressable
+                      key={hall.id}
+                      style={[styles.placeRow, selected && styles.placeRowSelected]}
+                      onPress={() => openDetail(hall)}>
+                      <View style={styles.placeRowMain}>
+                        <View style={styles.placeIconWrap}>
+                          <Ionicons
+                            name={hall.status?.isOpen ? 'restaurant' : 'restaurant-outline'}
+                            size={18}
+                            color={recommended ? '#2F6FED' : hall.status?.isOpen ? '#1B8B4B' : '#B44A4A'}
+                          />
+                        </View>
+                        <View style={styles.placeCopy}>
+                          <View style={styles.placeTitleRow}>
+                            <Text style={styles.placeName}>{hall.name}</Text>
+                            {recommended ? (
+                              <View style={styles.inlineBadge}>
+                                <Text style={styles.inlineBadgeText}>For you</Text>
+                              </View>
+                            ) : null}
+                          </View>
+                          <Text style={styles.placeMeta}>
+                            {hall.category ?? 'Dining Spot'} | {getStatusLabel(hall)}
+                            {distance ? ` | ${distance}` : ''}
+                          </Text>
+                        </View>
+                      </View>
+                      <Ionicons name="chevron-forward" size={16} color="#9A8F89" />
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </ScrollView>
+
+            {/* Page 1: My Day */}
+            <ScrollView
+              style={{ width: pagerWidth }}
+              contentContainerStyle={styles.sheetContent}
+              showsVerticalScrollIndicator={false}
+              nestedScrollEnabled>
+              <ScheduleEditorPanel />
+            </ScrollView>
+
+            {/* Page 2: Social */}
+            <ScrollView
+              style={{ width: pagerWidth }}
+              contentContainerStyle={styles.sheetContent}
+              showsVerticalScrollIndicator={false}
+              nestedScrollEnabled>
+              <GroupsPanel />
+            </ScrollView>
+
+            {/* Page 3: Me */}
+            <ScrollView
+              style={{ width: pagerWidth }}
+              contentContainerStyle={styles.sheetContent}
+              showsVerticalScrollIndicator={false}
+              nestedScrollEnabled>
+              <MePanel />
+            </ScrollView>
+          </ScrollView>
+        )}
       </Animated.View>
     </View>
   );
@@ -509,6 +829,55 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
+  markerContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 44,
+    height: 44,
+  },
+  markerSelected: {
+    transform: [{ scale: 1.16 }],
+    backgroundColor: 'rgba(80, 0, 0, 0.12)',
+    borderRadius: 22,
+    boxShadow: '0 8px 20px rgba(80, 0, 0, 0.45)',
+  },
+  markerIcon: {
+    textShadowColor: 'rgba(0, 0, 0, 0.2)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
+  },
+  pinDot: {
+    position: 'absolute',
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: 'white',
+    top: 13,
+  },
+  badge: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    backgroundColor: '#DC2626',
+    borderRadius: 10,
+    minWidth: 18,
+    height: 18,
+    paddingHorizontal: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: 'white',
+    boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.15)',
+    elevation: 3,
+  },
+  badgeSocial: {
+    backgroundColor: '#D98A2B',
+  },
+  badgeText: {
+    color: 'white',
+    fontSize: 9,
+    fontWeight: '800',
+  },
   recenterButton: {
     position: 'absolute',
     right: 18,
@@ -519,10 +888,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.94)',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#1E1A17',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.12,
-    shadowRadius: 18,
+    boxShadow: '0px 8px 18px rgba(30, 26, 23, 0.12)',
     elevation: 5,
   },
   sheet: {
@@ -531,10 +897,7 @@ const styles = StyleSheet.create({
     right: 12,
     borderRadius: 30,
     backgroundColor: 'rgba(248,245,240,0.98)',
-    shadowColor: '#1E1A17',
-    shadowOffset: { width: 0, height: 14 },
-    shadowOpacity: 0.18,
-    shadowRadius: 22,
+    boxShadow: '0px 14px 22px rgba(30, 26, 23, 0.18)',
     elevation: 14,
     overflow: 'hidden',
     borderWidth: 1,
@@ -557,10 +920,16 @@ const styles = StyleSheet.create({
     backgroundColor: '#D2C7C1',
   },
   pageTabsWrap: {
+    flex: 1,
     flexDirection: 'row',
     backgroundColor: '#ECE6E0',
     borderRadius: 18,
     padding: 4,
+  },
+  sheetControlsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
   },
   pageTabButton: {
     flex: 1,
@@ -571,10 +940,7 @@ const styles = StyleSheet.create({
   },
   pageTabButtonActive: {
     backgroundColor: '#FFFFFF',
-    shadowColor: '#1E1A17',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 6,
+    boxShadow: '0px 2px 6px rgba(30, 26, 23, 0.1)',
     elevation: 2,
   },
   pageTabLabel: {
@@ -584,6 +950,21 @@ const styles = StyleSheet.create({
   },
   pageTabLabelActive: {
     color: '#2B2320',
+  },
+  minimizeButton: {
+    minHeight: 38,
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2D9D2',
+  },
+  minimizeButtonText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#5D514C',
   },
   pagerScroll: {
     flex: 1,
@@ -603,10 +984,7 @@ const styles = StyleSheet.create({
   },
   segmentButtonActive: {
     backgroundColor: '#FFFFFF',
-    shadowColor: '#1E1A17',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
+    boxShadow: '0px 3px 8px rgba(30, 26, 23, 0.08)',
     elevation: 2,
   },
   segmentLabel: {
@@ -618,6 +996,11 @@ const styles = StyleSheet.create({
     color: '#2B2320',
   },
   sheetContent: {
+    paddingHorizontal: 18,
+    paddingBottom: 32,
+    gap: 16,
+  },
+  focusedSheetContent: {
     paddingHorizontal: 18,
     paddingBottom: 32,
     gap: 16,
@@ -658,11 +1041,123 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     padding: 18,
     gap: 12,
-    shadowColor: '#1E1A17',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.06,
-    shadowRadius: 16,
-    elevation: 3,
+    borderWidth: 1,
+    borderColor: '#EFE6DE',
+  },
+  focusedPrimaryCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 18,
+    gap: 12,
+    boxShadow: '0px 16px 36px rgba(80, 0, 0, 0.16)',
+    elevation: 6,
+  },
+  inviteCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 18,
+    gap: 14,
+    boxShadow: '0px 16px 36px rgba(80, 0, 0, 0.16)',
+    elevation: 6,
+  },
+  inviteHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  inviteEyebrow: {
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+    color: '#8A7B74',
+  },
+  inviteCountBadge: {
+    backgroundColor: '#FFF3E3',
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  inviteCountBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#A45B1C',
+  },
+  inviteList: {
+    gap: 10,
+  },
+  inviteRow: {
+    borderRadius: 18,
+    backgroundColor: '#FBF8F4',
+    borderWidth: 1,
+    borderColor: '#EFE6DE',
+    padding: 14,
+    gap: 4,
+  },
+  inviteTopLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  inviteName: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#2B2320',
+  },
+  inviteStatusBadge: {
+    backgroundColor: '#FFF3E3',
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  inviteStatusText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#A45B1C',
+  },
+  inviteMeta: {
+    fontSize: 12,
+    color: '#7A6E69',
+    lineHeight: 17,
+  },
+  inviteMessage: {
+    fontSize: 13,
+    color: '#564B46',
+    lineHeight: 19,
+  },
+  inviteActions: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 6,
+  },
+  acceptInviteButton: {
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+    backgroundColor: '#F0FDF4',
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  acceptInviteButtonText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#15803D',
+  },
+  declineInviteButton: {
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    backgroundColor: '#FEF2F2',
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  declineInviteButtonText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#B91C1C',
   },
   primaryHeader: {
     flexDirection: 'row',

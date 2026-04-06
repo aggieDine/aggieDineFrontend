@@ -1,5 +1,5 @@
-import React, { useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, Alert, TouchableOpacity, AppState } from 'react-native';
+import React, { useEffect } from 'react';
+import { View, Text, StyleSheet, ActivityIndicator, Alert, TouchableOpacity, Platform } from 'react-native';
 import * as AuthSession from 'expo-auth-session';
 import * as WebBrowser from 'expo-web-browser';
 import { useAuth, COGNITO_CONFIG } from '../../auth/AuthContext';
@@ -11,11 +11,14 @@ const discovery: AuthSession.DiscoveryDocument = {
   tokenEndpoint: `${COGNITO_CONFIG.domain}/oauth2/token`,
 };
 
-const redirectUri = AuthSession.makeRedirectUri({ scheme: 'aggiedine' });
+const redirectUri = Platform.OS === 'web'
+  ? (typeof window !== 'undefined' ? window.location.origin : '')
+  : AuthSession.makeRedirectUri({ scheme: 'aggiedine' });
 
 export default function LoginScreen() {
   const { signIn, signInWithToken, isLoading } = useAuth();
 
+  // Native: use the auth session hook
   const [request, response, promptAsync] = AuthSession.useAuthRequest(
     {
       clientId: COGNITO_CONFIG.clientId,
@@ -33,7 +36,7 @@ export default function LoginScreen() {
   useEffect(() => {
     if (response?.type === 'success') {
       const { code } = response.params;
-      handleCodeExchange(code);
+      exchangeCodeForTokens(code);
     } else if (response?.type === 'error') {
       Alert.alert(
         'Login Failed',
@@ -42,24 +45,24 @@ export default function LoginScreen() {
     }
   }, [response]);
 
-  const handleCodeExchange = async (code: string) => {
+  const exchangeCodeForTokens = async (code: string) => {
     try {
-      const tokenResult = await AuthSession.exchangeCodeAsync(
-        {
-          clientId: COGNITO_CONFIG.clientId,
-          code,
-          redirectUri,
-          extraParams: request?.codeVerifier
-            ? { code_verifier: request.codeVerifier }
-            : undefined,
-        },
-        discovery
-      );
+      const tokenResponse = await fetch(`${COGNITO_CONFIG.domain}/oauth2/token`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body:
+          `grant_type=authorization_code` +
+          `&client_id=${COGNITO_CONFIG.clientId}` +
+          `&code=${code}` +
+          `&redirect_uri=${encodeURIComponent(redirectUri)}`,
+      });
 
-      if (tokenResult.idToken) {
-        await signInWithToken(tokenResult.idToken);
+      const tokens = await tokenResponse.json();
+
+      if (tokens.id_token) {
+        await signInWithToken(tokens.id_token);
       } else {
-        Alert.alert('Login Failed', 'No ID token received');
+        Alert.alert('Login Failed', tokens.error || 'No ID token received');
       }
     } catch (error: any) {
       Alert.alert('Login Failed', error.message);
@@ -67,10 +70,22 @@ export default function LoginScreen() {
   };
 
   const handleGoogleLogin = async () => {
-    try {
-      await promptAsync({ preferEphemeralSession: true });
-    } catch (error: any) {
-      Alert.alert('Login Error', error.message);
+    if (Platform.OS === 'web') {
+      // Full-page redirect — no popup issues
+      const authUrl =
+        `${COGNITO_CONFIG.domain}/oauth2/authorize?` +
+        `client_id=${COGNITO_CONFIG.clientId}` +
+        `&response_type=code` +
+        `&scope=openid+email` +
+        `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+        `&identity_provider=Google`;
+      window.location.href = authUrl;
+    } else {
+      try {
+        await promptAsync({ preferEphemeralSession: true });
+      } catch (error: any) {
+        Alert.alert('Login Error', error.message);
+      }
     }
   };
 
@@ -94,7 +109,7 @@ export default function LoginScreen() {
           <TouchableOpacity
             style={styles.googleButton}
             onPress={handleGoogleLogin}
-            disabled={!request}
+            disabled={Platform.OS !== 'web' && !request}
           >
             <Text style={styles.googleButtonText}>Sign in with Google</Text>
           </TouchableOpacity>

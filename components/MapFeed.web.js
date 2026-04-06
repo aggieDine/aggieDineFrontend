@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
@@ -5,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import MapView, { Marker, NavigationControl } from 'react-map-gl/maplibre';
 
 import GroupsPanel from './panels/GroupsPanel';
+import MePanel from './panels/MePanel';
 import ScheduleEditorPanel from './panels/ScheduleEditorPanel';
 
 const MAP_STYLE = 'https://tiles.openfreemap.org/styles/liberty';
@@ -15,6 +17,14 @@ const PAGE_TABS = [
   { key: 'social', label: 'Social' },
   { key: 'me', label: 'Me' },
 ];
+
+const GROUP_INVITES_STORAGE_KEY = 'groupInvites';
+const EXPLORE_PAGE_INDEX = 0;
+const MY_DAY_PAGE_INDEX = 1;
+const SOCIAL_PAGE_INDEX = 2;
+const ME_PAGE_INDEX = 3;
+const SOCIAL_PIN_COLOR = '#D98A2B';
+const MY_DAY_MARKER_LIMIT = 4;
 
 
 function clamp(value, min, max) {
@@ -43,6 +53,25 @@ function formatDistanceMiles(distanceKm) {
 
 function getStatusLabel(hall) {
   return hall?.status?.isOpen ? 'Open Now' : 'Closed';
+}
+
+function formatInviteStatus(status) {
+  if (!status) return 'Pending';
+  return status.charAt(0).toUpperCase() + status.slice(1);
+}
+
+function normalizeVenueName(value) {
+  return value?.trim().toLowerCase() ?? '';
+}
+
+function dedupeHalls(halls) {
+  const seen = new Set();
+
+  return halls.filter((hall) => {
+    if (!hall?.id || seen.has(hall.id)) return false;
+    seen.add(hall.id);
+    return true;
+  });
 }
 
 function getExploreCopy({ selectedHall, suggestion }) {
@@ -83,6 +112,7 @@ export default function MapFeed({
   diningHalls = [],
   suggestion,
   nextClass,
+  nextClassLocation,
   userLocation,
   recommendationMode = 'schedule',
   onRecommendationModeChange,
@@ -94,10 +124,12 @@ export default function MapFeed({
   const pagerRef = useRef(null);
 
   const [selectedHall, setSelectedHall] = useState(null);
+  const [selectedCluster, setSelectedCluster] = useState(null);
   const [sheetHeight, setSheetHeight] = useState(0);
   const [sheetOffset, setSheetOffset] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const [activePageIndex, setActivePageIndex] = useState(0);
+  const [groupInvites, setGroupInvites] = useState([]);
 
   const detents = useMemo(() => {
     const collapsedVisible = 86;
@@ -110,20 +142,121 @@ export default function MapFeed({
     };
   }, [sheetHeight]);
 
+  const loadGroupInvites = useCallback(async () => {
+    try {
+      const stored = await AsyncStorage.getItem(GROUP_INVITES_STORAGE_KEY);
+      setGroupInvites(stored ? JSON.parse(stored) : []);
+    } catch (error) {
+      console.error('Failed to load group invites for map markers', error);
+    }
+  }, []);
+
+  const saveGroupInvites = useCallback(async (updatedInvites) => {
+    try {
+      setGroupInvites(updatedInvites);
+      await AsyncStorage.setItem(GROUP_INVITES_STORAGE_KEY, JSON.stringify(updatedInvites));
+    } catch (error) {
+      console.error('Failed to save group invites for map markers', error);
+    }
+  }, []);
+
+  const updateInviteStatus = useCallback(
+    async (inviteId, nextStatus) => {
+      const updatedInvites = groupInvites.map((invite) =>
+        invite.id === inviteId ? { ...invite, status: nextStatus } : invite
+      );
+      await saveGroupInvites(updatedInvites);
+    },
+    [groupInvites, saveGroupInvites]
+  );
+
+  useEffect(() => {
+    loadGroupInvites();
+  }, [loadGroupInvites]);
+
+  useEffect(() => {
+    if (activePageIndex === SOCIAL_PAGE_INDEX) {
+      loadGroupInvites();
+    }
+  }, [activePageIndex, loadGroupInvites]);
+
+  const inviteCounts = useMemo(() => {
+    const counts = {};
+    groupInvites.forEach((invite) => {
+      if (invite?.status === 'pending' || invite?.status === 'accepted') {
+        const name = normalizeVenueName(invite.restaurant);
+        counts[name] = (counts[name] || 0) + 1;
+      }
+    });
+    return counts;
+  }, [groupInvites]);
+
+  const activeInviteRestaurants = useMemo(
+    () => new Set(Object.keys(inviteCounts)),
+    [inviteCounts]
+  );
+
+  const markerDiningHalls = useMemo(() => {
+    const hallsWithCoords = diningHalls.filter((hall) => hall.coordinates?.latitude);
+    const openHalls = hallsWithCoords.filter((hall) => hall.status?.isOpen);
+    const decorateHall = (hall) => {
+      const normalized = normalizeVenueName(hall.name);
+      return {
+        ...hall,
+        hasActiveInvite: activeInviteRestaurants.has(normalized),
+        inviteCount: inviteCounts[normalized] || 0,
+      };
+    };
+
+    if (activePageIndex === MY_DAY_PAGE_INDEX && nextClassLocation) {
+      const biasedHalls = [...openHalls]
+        .sort(
+          (a, b) =>
+            getDistanceKm(
+              nextClassLocation.latitude,
+              nextClassLocation.longitude,
+              a.coordinates.latitude,
+              a.coordinates.longitude
+            ) -
+            getDistanceKm(
+              nextClassLocation.latitude,
+              nextClassLocation.longitude,
+              b.coordinates.latitude,
+              b.coordinates.longitude
+            )
+        )
+        .slice(0, MY_DAY_MARKER_LIMIT);
+
+      return dedupeHalls(selectedHall ? [...biasedHalls, selectedHall] : biasedHalls).map(decorateHall);
+    }
+
+    if (activePageIndex === SOCIAL_PAGE_INDEX) {
+      const inviteHalls = hallsWithCoords.filter((hall) =>
+        activeInviteRestaurants.has(normalizeVenueName(hall.name))
+      );
+
+      return dedupeHalls(
+        selectedHall ? [...openHalls, ...inviteHalls, selectedHall] : [...openHalls, ...inviteHalls]
+      ).map(decorateHall);
+    }
+
+    return dedupeHalls(selectedHall ? [...openHalls, selectedHall] : openHalls).map(decorateHall);
+  }, [activeInviteRestaurants, activePageIndex, diningHalls, inviteCounts, nextClassLocation, selectedHall]);
+
   const groupedMarkers = useMemo(() => {
-    if (!diningHalls.length) return [];
+    if (!markerDiningHalls.length) return [];
 
     const clusterRadius = 0.0008;
     const groups = [];
     const used = new Set();
 
-    diningHalls.forEach((hall, i) => {
+    markerDiningHalls.forEach((hall, i) => {
       if (used.has(i) || !hall.coordinates?.latitude) return;
 
       const group = [hall];
       used.add(i);
 
-      diningHalls.forEach((other, j) => {
+      markerDiningHalls.forEach((other, j) => {
         if (used.has(j) || !other.coordinates?.latitude) return;
         const dist = Math.sqrt(
           Math.pow(hall.coordinates.latitude - other.coordinates.latitude, 2) +
@@ -138,6 +271,7 @@ export default function MapFeed({
       groups.push({
         id: `cluster-${i}`,
         items: group,
+        totalInvites: group.reduce((sum, item) => sum + (item.inviteCount || 0), 0),
         center: {
           latitude: group.reduce((sum, item) => sum + item.coordinates.latitude, 0) / group.length,
           longitude: group.reduce((sum, item) => sum + item.coordinates.longitude, 0) / group.length,
@@ -145,8 +279,8 @@ export default function MapFeed({
       });
     });
 
-    return groups;
-  }, [diningHalls]);
+      return groups;
+  }, [markerDiningHalls]);
 
   const places = useMemo(() => {
     return [...diningHalls].sort((a, b) => {
@@ -214,21 +348,32 @@ export default function MapFeed({
   }, []);
 
   useEffect(() => {
-    snapTo(selectedHall ? 'expanded' : 'medium');
-  }, [selectedHall, snapTo]);
+    snapTo(selectedHall || selectedCluster ? 'expanded' : 'medium');
+  }, [selectedCluster, selectedHall, snapTo]);
+
+  const focusMapOnHall = useCallback((hall) => {
+    if (!hall?.coordinates || !mapRef.current) return;
+
+    mapRef.current.flyTo({
+      center: [hall.coordinates.longitude, hall.coordinates.latitude],
+      zoom: 17,
+      duration: 600,
+    });
+  }, []);
 
   const handleClusterClick = useCallback(
     (cluster) => {
       if (cluster.items.length === 1) {
+        setSelectedCluster(null);
         setSelectedHall(cluster.items[0]);
-        setActivePageIndex(0);
-        if (pagerRef.current) {
-          pagerRef.current.scrollTo({ left: 0, behavior: 'smooth' });
-        }
+        focusMapOnHall(cluster.items[0]);
         setSheetOffset(detents.expanded);
         return;
       }
 
+      setSelectedHall(null);
+      setSelectedCluster(cluster);
+      
       if (mapRef.current) {
         mapRef.current.flyTo({
           center: [cluster.center.longitude, cluster.center.latitude],
@@ -236,8 +381,10 @@ export default function MapFeed({
           duration: 600,
         });
       }
+
+      setSheetOffset(detents.expanded);
     },
-    []
+    [detents.expanded, focusMapOnHall]
   );
 
   const recenterOnUser = useCallback(() => {
@@ -249,6 +396,10 @@ export default function MapFeed({
       });
     }
   }, [userLocation]);
+
+  const minimizeSheet = useCallback(() => {
+    setSheetOffset(detents.collapsed);
+  }, [detents.collapsed]);
 
   const releaseDrag = useCallback(
     (clientY, velocity = 0) => {
@@ -332,6 +483,53 @@ export default function MapFeed({
   const exploreCopy = getExploreCopy({ selectedHall, suggestion });
   const myDayCopy = getMyDayCopy({ selectedHall, suggestion, nextClass });
   const activeHall = selectedHall ?? suggestion;
+  const selectedHallHasActiveInvite = activeInviteRestaurants.has(normalizeVenueName(selectedHall?.name));
+  const selectedClusterItems = useMemo(() => {
+    if (!selectedCluster?.items?.length) return [];
+
+    return [...selectedCluster.items].sort((a, b) => {
+      const aRecommended = a.id === suggestion?.id ? 1 : 0;
+      const bRecommended = b.id === suggestion?.id ? 1 : 0;
+      if (aRecommended !== bRecommended) return bRecommended - aRecommended;
+
+      const aInvites = a.inviteCount || 0;
+      const bInvites = b.inviteCount || 0;
+      if (aInvites !== bInvites) return bInvites - aInvites;
+
+      const aDistance =
+        userLocation && a.coordinates
+          ? getDistanceKm(
+              userLocation.latitude,
+              userLocation.longitude,
+              a.coordinates.latitude,
+              a.coordinates.longitude
+            )
+          : Infinity;
+      const bDistance =
+        userLocation && b.coordinates
+          ? getDistanceKm(
+              userLocation.latitude,
+              userLocation.longitude,
+              b.coordinates.latitude,
+              b.coordinates.longitude
+            )
+          : Infinity;
+
+      return aDistance - bDistance;
+    });
+  }, [selectedCluster, suggestion, userLocation]);
+  const selectedHallInvites = useMemo(() => {
+    const selectedName = normalizeVenueName(selectedHall?.name);
+    if (!selectedName) return [];
+
+    return groupInvites
+      .filter(
+        (invite) =>
+          normalizeVenueName(invite.restaurant) === selectedName &&
+          (invite?.status === 'pending' || invite?.status === 'accepted')
+      )
+      .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+  }, [groupInvites, selectedHall]);
   const activeDistance =
     activeHall?.coordinates && userLocation
       ? formatDistanceMiles(
@@ -343,6 +541,31 @@ export default function MapFeed({
           )
         )
       : null;
+  const focusedDetailCopy =
+    activePageIndex === MY_DAY_PAGE_INDEX
+      ? getMyDayCopy({ selectedHall, suggestion, nextClass })
+      : activePageIndex === SOCIAL_PAGE_INDEX
+        ? {
+            eyebrow: selectedHallHasActiveInvite ? 'Active Invite Spot' : 'Social Spot',
+            title: selectedHall?.name ?? 'Dining Spot',
+            body: selectedHallHasActiveInvite
+              ? 'This dining spot is tied to active invite activity.'
+              : 'Viewing details for a dining spot you can use for group plans.',
+          }
+        : activePageIndex === ME_PAGE_INDEX
+          ? {
+              eyebrow: 'Selected Place',
+              title: selectedHall?.name ?? 'Dining Spot',
+              body: 'Viewing details for this dining spot from your personal map.',
+            }
+          : getExploreCopy({ selectedHall, suggestion });
+
+  useEffect(() => {
+    if (selectedHall || selectedCluster || !pagerRef.current) return;
+
+    const pageWidth = pagerRef.current.offsetWidth;
+    pagerRef.current.scrollTo({ left: pageWidth * activePageIndex, behavior: 'auto' });
+  }, [activePageIndex, selectedCluster, selectedHall]);
 
   return (
     <div style={styles.frame}>
@@ -358,7 +581,10 @@ export default function MapFeed({
         mapStyle={MAP_STYLE}
         mapLib={maplibregl}
         attributionControl={false}
-        onClick={() => setSelectedHall(null)}
+        onClick={() => {
+          setSelectedHall(null);
+          setSelectedCluster(null);
+        }}
         onLoad={(e) => {
           const map = e.target;
           if (map.getLayer('poi_transit')) {
@@ -384,6 +610,13 @@ export default function MapFeed({
           const isSingle = cluster.items.length === 1;
           const hall = cluster.items[0];
           const isSuggested = suggestion && isSingle && hall.id === suggestion.id;
+          const totalInvites = cluster.totalInvites ?? 0;
+          const formattedCount = totalInvites >= 100 ? '99+' : totalInvites.toString();
+          const hasActiveInvite = totalInvites > 0;
+          const isInviteHighlighted = activePageIndex === SOCIAL_PAGE_INDEX && hasActiveInvite;
+          const isSelected = isSingle
+            ? selectedHall?.id === hall.id
+            : selectedCluster?.id === cluster.id;
 
           return (
             <Marker
@@ -399,15 +632,54 @@ export default function MapFeed({
                 <div
                   style={{
                     ...styles.pin,
-                    backgroundColor: isSuggested ? '#2F6FED' : hall.status?.isOpen ? '#22A45D' : '#D64545',
-                    transform: isSuggested ? 'scale(1.16)' : 'scale(1)',
-                    boxShadow: isSuggested ? '0 0 18px rgba(47,111,237,0.35)' : '0 6px 14px rgba(0,0,0,0.22)',
+                    backgroundColor: isSelected
+                      ? '#500000'
+                      : isInviteHighlighted
+                        ? SOCIAL_PIN_COLOR
+                        : isSuggested
+                          ? '#2F6FED'
+                          : hall.status?.isOpen
+                            ? '#22A45D'
+                            : '#D64545',
+                    transform: isSelected || isInviteHighlighted || isSuggested ? 'scale(1.16)' : 'scale(1)',
+                    boxShadow: isSelected
+                      ? '0 0 0 3px #FFFFFF, 0 0 0 6px rgba(80,0,0,0.6), 0 8px 20px rgba(80,0,0,0.5)'
+                      : isInviteHighlighted
+                        ? '0 0 18px rgba(217,138,43,0.35)'
+                        : isSuggested
+                          ? '0 0 18px rgba(47,111,237,0.35)'
+                          : '0 6px 14px rgba(0,0,0,0.22)',
                   }}>
                   <span style={styles.pinGlyph}>🍽</span>
+                  {totalInvites > 0 && (
+                    <div style={styles.markerBadge}>
+                      <span style={styles.markerBadgeText}>{formattedCount}</span>
+                    </div>
+                  )}
                 </div>
               ) : (
-                <div style={styles.clusterBubble}>
+                <div
+                  style={{
+                    ...styles.clusterBubble,
+                    transform: isSelected ? 'scale(1.12)' : 'scale(1)',
+                    ...(isSelected
+                      ? {
+                          backgroundColor: '#500000',
+                          boxShadow: '0 0 0 3px #FFFFFF, 0 0 0 6px rgba(80,0,0,0.6), 0 8px 20px rgba(80,0,0,0.5)',
+                        }
+                      : isInviteHighlighted
+                        ? {
+                            backgroundColor: SOCIAL_PIN_COLOR,
+                            boxShadow: '0 6px 14px rgba(217,138,43,0.3)',
+                          }
+                        : null),
+                  }}>
                   <span style={styles.clusterCount}>{cluster.items.length}</span>
+                  {totalInvites > 0 && (
+                    <div style={styles.clusterBadge}>
+                      <span style={styles.markerBadgeText}>{formattedCount}</span>
+                    </div>
+                  )}
                 </div>
               )}
             </Marker>
@@ -446,102 +718,173 @@ export default function MapFeed({
             }}>
             <div style={styles.grabber} />
           </div>
-          <div style={styles.pageTabsWrap}>
-            {PAGE_TABS.map((tab, index) => {
-              const selected = activePageIndex === index;
-              return (
-                <button
-                  key={tab.key}
-                  style={{
-                    ...styles.pageTabButton,
-                    ...(selected ? styles.pageTabButtonActive : null),
-                  }}
-                  onClick={() => {
-                    setActivePageIndex(index);
-                    if (index === 0) onRecommendationModeChange?.('location');
-                    else if (index === 1) onRecommendationModeChange?.('schedule');
-                    if (pagerRef.current) {
-                      const pageWidth = pagerRef.current.offsetWidth;
-                      pagerRef.current.scrollTo({ left: pageWidth * index, behavior: 'smooth' });
-                    }
-                  }}>
-                  <span
+          <div style={styles.sheetControlsRow}>
+            <div style={styles.pageTabsWrap}>
+              {PAGE_TABS.map((tab, index) => {
+                const selected = activePageIndex === index;
+                return (
+                  <button
+                    key={tab.key}
                     style={{
-                      ...styles.pageTabLabel,
-                      ...(selected ? styles.pageTabLabelActive : null),
+                      ...styles.pageTabButton,
+                      ...(selected ? styles.pageTabButtonActive : null),
+                    }}
+                    onClick={() => {
+                      if (selectedHall || selectedCluster) return;
+                      setActivePageIndex(index);
+                      setSheetOffset(detents.expanded);
+                      if (index === EXPLORE_PAGE_INDEX) onRecommendationModeChange?.('location');
+                      else if (index === MY_DAY_PAGE_INDEX) onRecommendationModeChange?.('schedule');
+                      if (pagerRef.current) {
+                        const pageWidth = pagerRef.current.offsetWidth;
+                        pagerRef.current.scrollTo({ left: pageWidth * index, behavior: 'smooth' });
+                      }
                     }}>
-                    {tab.label}
-                  </span>
+                    <span
+                      style={{
+                        ...styles.pageTabLabel,
+                        ...(selected ? styles.pageTabLabelActive : null),
+                      }}>
+                      {tab.label}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+            <button style={styles.minimizeButton} onClick={minimizeSheet} aria-label="Minimize sheet">
+              V
+            </button>
+          </div>
+        </div>
+
+        {selectedHall ? (
+          <div style={styles.focusedSheetContent}>
+            <div style={styles.heroBlock}>
+              <p style={styles.eyebrow}>{focusedDetailCopy.eyebrow}</p>
+              <h2 style={styles.title}>{focusedDetailCopy.title}</h2>
+              <p style={styles.body}>{focusedDetailCopy.body}</p>
+            </div>
+
+            <div style={styles.focusedPrimaryCard}>
+              <div style={styles.primaryHeader}>
+                <div style={styles.primaryTitleWrap}>
+                  <h3 style={styles.primaryTitle}>{selectedHall.name}</h3>
+                  <p style={styles.primaryMeta}>
+                    {selectedHall.category ?? 'Dining Spot'} | {getStatusLabel(selectedHall)}
+                  </p>
+                </div>
+                <button
+                  style={styles.clearButton}
+                  onClick={() => setSelectedHall(null)}
+                  aria-label="Close place details">
+                  x
                 </button>
-              );
-            })}
-          </div>
-        </div>
-
-        <div
-          ref={pagerRef}
-          style={styles.pagerScroll}
-          onScroll={(e) => {
-            const el = e.currentTarget;
-            const page = Math.round(el.scrollLeft / el.offsetWidth);
-            if (page !== activePageIndex) {
-              setActivePageIndex(page);
-              if (page === 0) onRecommendationModeChange?.('location');
-              else if (page === 1) onRecommendationModeChange?.('schedule');
-            }
-          }}>
-          {/* Page 0: Explore (Near Me) */}
-          <div style={styles.pagerPage}>
-            <div style={styles.sheetContent}>
-              <div style={styles.heroBlock}>
-                <p style={styles.eyebrow}>{exploreCopy.eyebrow}</p>
-                <h2 style={styles.title}>{exploreCopy.title}</h2>
-                <p style={styles.body}>{exploreCopy.body}</p>
               </div>
 
-              {activeHall ? (
-                <div style={styles.primaryCard}>
-                  <div style={styles.primaryHeader}>
-                    <div style={styles.primaryTitleWrap}>
-                      <h3 style={styles.primaryTitle}>{activeHall.name}</h3>
-                      <p style={styles.primaryMeta}>
-                        {activeHall.category ?? 'Dining Spot'} | {getStatusLabel(activeHall)}
-                      </p>
-                    </div>
-                    {selectedHall ? (
-                      <button
-                        style={styles.clearButton}
-                        onClick={() => setSelectedHall(null)}
-                        aria-label="Close place details">
-                        x
-                      </button>
-                    ) : (
-                      <span style={styles.recommendedBadge}>Recommended</span>
-                    )}
-                  </div>
-
-                  {activeDistance ? (
-                    <div style={styles.infoRow}>
-                      <span style={styles.infoIcon}>Walk</span>
-                      <span style={styles.infoText}>{activeDistance}</span>
-                    </div>
-                  ) : null}
-
-                  <div style={styles.infoRow}>
-                    <span style={styles.infoIcon}>Near</span>
-                    <span style={styles.infoText}>Anchored to your live location</span>
-                  </div>
+              {activeDistance ? (
+                <div style={styles.infoRow}>
+                  <span style={styles.infoIcon}>Walk</span>
+                  <span style={styles.infoText}>{activeDistance}</span>
                 </div>
               ) : null}
 
-              <div style={styles.sectionHeader}>
-                <h3 style={styles.sectionTitle}>Dining Places</h3>
-                <p style={styles.sectionCaption}>Nearest spots based on your current location.</p>
+              {activePageIndex === MY_DAY_PAGE_INDEX && nextClass ? (
+                <div style={styles.infoRow}>
+                  <span style={styles.infoIcon}>Class</span>
+                  <span style={styles.infoText}>Planning around {nextClass.building}</span>
+                </div>
+              ) : activePageIndex === SOCIAL_PAGE_INDEX ? (
+                <div style={styles.infoRow}>
+                  <span style={styles.infoIcon}>Social</span>
+                  <span style={styles.infoText}>
+                    {selectedHallHasActiveInvite
+                      ? 'This spot has active invite activity.'
+                      : 'Open for future group invites.'}
+                  </span>
+                </div>
+              ) : activePageIndex === ME_PAGE_INDEX ? (
+                <div style={styles.infoRow}>
+                  <span style={styles.infoIcon}>Me</span>
+                  <span style={styles.infoText}>Viewing this spot from your personal dining view.</span>
+                </div>
+              ) : (
+                <div style={styles.infoRow}>
+                  <span style={styles.infoIcon}>Near</span>
+                  <span style={styles.infoText}>Anchored to your live location</span>
+                </div>
+              )}
+            </div>
+
+            {selectedHallInvites.length > 0 ? (
+              <div style={styles.inviteCard}>
+                <div style={styles.inviteHeader}>
+                  <p style={styles.inviteEyebrow}>Invite Activity</p>
+                  <span style={styles.inviteCountBadge}>
+                    {selectedHallInvites.length} active
+                  </span>
+                </div>
+
+                <div style={styles.inviteList}>
+                  {selectedHallInvites.map((invite) => (
+                    <div key={invite.id} style={styles.inviteRow}>
+                      <div style={styles.inviteCopy}>
+                        <div style={styles.inviteTopLine}>
+                          <span style={styles.inviteName}>{invite.friendName || 'Open Invite'}</span>
+                          <span style={styles.inviteStatus}>{formatInviteStatus(invite.status)}</span>
+                        </div>
+                        <span style={styles.inviteMeta}>
+                          {invite.date || 'TBD'} | {invite.time || 'TBD'}
+                        </span>
+                        {invite.message ? (
+                          <span style={styles.inviteMessage}>{invite.message}</span>
+                        ) : null}
+                        {invite.status === 'pending' ? (
+                          <div style={styles.inviteActions}>
+                            <button
+                              style={styles.acceptInviteButton}
+                              onClick={() => updateInviteStatus(invite.id, 'accepted')}>
+                              Accept
+                            </button>
+                            <button
+                              style={styles.declineInviteButton}
+                              onClick={() => updateInviteStatus(invite.id, 'declined')}>
+                              Decline
+                            </button>
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+          </div>
+        ) : selectedCluster ? (
+          <div style={styles.focusedSheetContent}>
+            <div style={styles.heroBlock}>
+              <p style={styles.eyebrow}>Location Cluster</p>
+              <h2 style={styles.title}>{selectedClusterItems.length} Places Here</h2>
+              <p style={styles.body}>Pick a restaurant below to open the full dining detail view.</p>
+            </div>
+
+            <div style={styles.clusterListCard}>
+              <div style={styles.primaryHeader}>
+                <div style={styles.primaryTitleWrap}>
+                  <h3 style={styles.primaryTitle}>Nearby Dining Options</h3>
+                  <p style={styles.primaryMeta}>
+                    Multiple restaurants share this map point at the current zoom.
+                  </p>
+                </div>
+                <button
+                  style={styles.clearButton}
+                  onClick={() => setSelectedCluster(null)}
+                  aria-label="Close clustered place list">
+                  x
+                </button>
               </div>
 
               <div style={styles.placeList}>
-                {places.map((hall) => {
-                  const selected = hall.id === selectedHall?.id;
+                {selectedClusterItems.map((hall) => {
                   const recommended = hall.id === suggestion?.id;
                   const distance =
                     userLocation && hall.coordinates
@@ -558,17 +901,25 @@ export default function MapFeed({
                   return (
                     <button
                       key={hall.id}
-                      style={{
-                        ...styles.placeRow,
-                        ...(selected ? styles.placeRowSelected : null),
-                      }}
-                      onClick={() => router.push(`/restaurant/${hall.id}`)}>
+                      style={styles.placeRow}
+                      onClick={() => {
+                        setSelectedCluster(null);
+                        setSelectedHall(hall);
+                        focusMapOnHall(hall);
+                      }}>
                       <div style={styles.placeRowMain}>
                         <div style={styles.placeIconWrap}>
                           <span
                             style={{
                               ...styles.placeIcon,
-                              color: recommended ? '#2F6FED' : hall.status?.isOpen ? '#1B8B4B' : '#B44A4A',
+                              color:
+                                hall.inviteCount > 0 && activePageIndex === SOCIAL_PAGE_INDEX
+                                  ? SOCIAL_PIN_COLOR
+                                  : recommended
+                                    ? '#2F6FED'
+                                    : hall.status?.isOpen
+                                      ? '#1B8B4B'
+                                      : '#B44A4A',
                             }}>
                             Eat
                           </span>
@@ -577,6 +928,11 @@ export default function MapFeed({
                           <div style={styles.placeTitleRow}>
                             <span style={styles.placeName}>{hall.name}</span>
                             {recommended ? <span style={styles.inlineBadge}>For you</span> : null}
+                            {hall.inviteCount > 0 ? (
+                              <span style={styles.clusterInlineBadge}>
+                                {hall.inviteCount} invite{hall.inviteCount === 1 ? '' : 's'}
+                              </span>
+                            ) : null}
                           </div>
                           <span style={styles.placeMeta}>
                             {hall.category ?? 'Dining Spot'} | {getStatusLabel(hall)}
@@ -591,130 +947,229 @@ export default function MapFeed({
               </div>
             </div>
           </div>
-
-          {/* Page 1: My Day (Before Class) */}
-          <div style={styles.pagerPage}>
-            <div style={styles.sheetContent}>
-              <div style={styles.heroBlock}>
-                <p style={styles.eyebrow}>{myDayCopy.eyebrow}</p>
-                <h2 style={styles.title}>{myDayCopy.title}</h2>
-                <p style={styles.body}>{myDayCopy.body}</p>
-              </div>
-
-              {activeHall && nextClass ? (
-                <div style={styles.primaryCard}>
-                  <div style={styles.primaryHeader}>
-                    <div style={styles.primaryTitleWrap}>
-                      <h3 style={styles.primaryTitle}>{activeHall.name}</h3>
-                      <p style={styles.primaryMeta}>
-                        {activeHall.category ?? 'Dining Spot'} | {getStatusLabel(activeHall)}
-                      </p>
-                    </div>
-                    {selectedHall ? (
-                      <button
-                        style={styles.clearButton}
-                        onClick={() => setSelectedHall(null)}
-                        aria-label="Close place details">
-                        x
-                      </button>
-                    ) : (
-                      <span style={styles.recommendedBadge}>Recommended</span>
-                    )}
-                  </div>
-
-                  {activeDistance ? (
-                    <div style={styles.infoRow}>
-                      <span style={styles.infoIcon}>Walk</span>
-                      <span style={styles.infoText}>{activeDistance}</span>
-                    </div>
-                  ) : null}
-
-                  <div style={styles.infoRow}>
-                    <span style={styles.infoIcon}>Class</span>
-                    <span style={styles.infoText}>Planning around {nextClass.building}</span>
-                  </div>
+        ) : (
+          <div
+            ref={pagerRef}
+            style={styles.pagerScroll}
+            onScroll={(e) => {
+              const el = e.currentTarget;
+              const page = Math.round(el.scrollLeft / el.offsetWidth);
+              if (page !== activePageIndex) {
+                setActivePageIndex(page);
+                if (page === EXPLORE_PAGE_INDEX) onRecommendationModeChange?.('location');
+                else if (page === MY_DAY_PAGE_INDEX) onRecommendationModeChange?.('schedule');
+              }
+            }}>
+            {/* Page 0: Explore (Near Me) */}
+            <div style={styles.pagerPage}>
+              <div style={styles.sheetContent}>
+                <div style={styles.heroBlock}>
+                  <p style={styles.eyebrow}>{exploreCopy.eyebrow}</p>
+                  <h2 style={styles.title}>{exploreCopy.title}</h2>
+                  <p style={styles.body}>{exploreCopy.body}</p>
                 </div>
-              ) : null}
 
-              <div style={styles.sectionHeader}>
-                <h3 style={styles.sectionTitle}>Dining Places</h3>
-                <p style={styles.sectionCaption}>Closest options before your next class.</p>
-              </div>
-
-              <div style={styles.placeList}>
-                {places.map((hall) => {
-                  const selected = hall.id === selectedHall?.id;
-                  const recommended = hall.id === suggestion?.id;
-                  const distance =
-                    userLocation && hall.coordinates
-                      ? formatDistanceMiles(
-                          getDistanceKm(
-                            userLocation.latitude,
-                            userLocation.longitude,
-                            hall.coordinates.latitude,
-                            hall.coordinates.longitude
-                          )
-                        )
-                      : null;
-
-                  return (
-                    <button
-                      key={hall.id}
-                      style={{
-                        ...styles.placeRow,
-                        ...(selected ? styles.placeRowSelected : null),
-                      }}
-                      onClick={() => router.push(`/restaurant/${hall.id}`)}>
-                      <div style={styles.placeRowMain}>
-                        <div style={styles.placeIconWrap}>
-                          <span
-                            style={{
-                              ...styles.placeIcon,
-                              color: recommended ? '#2F6FED' : hall.status?.isOpen ? '#1B8B4B' : '#B44A4A',
-                            }}>
-                            Eat
-                          </span>
-                        </div>
-                        <div style={styles.placeCopy}>
-                          <div style={styles.placeTitleRow}>
-                            <span style={styles.placeName}>{hall.name}</span>
-                            {recommended ? <span style={styles.inlineBadge}>For you</span> : null}
-                          </div>
-                          <span style={styles.placeMeta}>
-                            {hall.category ?? 'Dining Spot'} | {getStatusLabel(hall)}
-                            {distance ? ` | ${distance}` : ''}
-                          </span>
-                        </div>
+                {activeHall ? (
+                  <div style={styles.primaryCard}>
+                    <div style={styles.primaryHeader}>
+                      <div style={styles.primaryTitleWrap}>
+                        <h3 style={styles.primaryTitle}>{activeHall.name}</h3>
+                        <p style={styles.primaryMeta}>
+                          {activeHall.category ?? 'Dining Spot'} | {getStatusLabel(activeHall)}
+                        </p>
                       </div>
-                      <span style={styles.placeChevron}>{'>'}</span>
-                    </button>
-                  );
-                })}
+                      <span style={styles.recommendedBadge}>Recommended</span>
+                    </div>
+
+                    {activeDistance ? (
+                      <div style={styles.infoRow}>
+                        <span style={styles.infoIcon}>Walk</span>
+                        <span style={styles.infoText}>{activeDistance}</span>
+                      </div>
+                    ) : null}
+
+                    <div style={styles.infoRow}>
+                      <span style={styles.infoIcon}>Near</span>
+                      <span style={styles.infoText}>Anchored to your live location</span>
+                    </div>
+                  </div>
+                ) : null}
+
+                <div style={styles.sectionHeader}>
+                  <h3 style={styles.sectionTitle}>Dining Places</h3>
+                  <p style={styles.sectionCaption}>Nearest spots based on your current location.</p>
+                </div>
+
+                <div style={styles.placeList}>
+                  {places.map((hall) => {
+                    const selected = hall.id === selectedHall?.id;
+                    const recommended = hall.id === suggestion?.id;
+                    const distance =
+                      userLocation && hall.coordinates
+                        ? formatDistanceMiles(
+                            getDistanceKm(
+                              userLocation.latitude,
+                              userLocation.longitude,
+                              hall.coordinates.latitude,
+                              hall.coordinates.longitude
+                            )
+                          )
+                        : null;
+
+                    return (
+                      <button
+                        key={hall.id}
+                        style={{
+                          ...styles.placeRow,
+                          ...(selected ? styles.placeRowSelected : null),
+                        }}
+                        onClick={() => {
+                          router.push(`/restaurant/${hall.id}`);
+                          focusMapOnHall(hall);
+                        }}>
+                        <div style={styles.placeRowMain}>
+                          <div style={styles.placeIconWrap}>
+                            <span
+                              style={{
+                                ...styles.placeIcon,
+                                color: recommended ? '#2F6FED' : hall.status?.isOpen ? '#1B8B4B' : '#B44A4A',
+                              }}>
+                              Eat
+                            </span>
+                          </div>
+                          <div style={styles.placeCopy}>
+                            <div style={styles.placeTitleRow}>
+                              <span style={styles.placeName}>{hall.name}</span>
+                              {recommended ? <span style={styles.inlineBadge}>For you</span> : null}
+                            </div>
+                            <span style={styles.placeMeta}>
+                              {hall.category ?? 'Dining Spot'} | {getStatusLabel(hall)}
+                              {distance ? ` | ${distance}` : ''}
+                            </span>
+                          </div>
+                        </div>
+                        <span style={styles.placeChevron}>{'>'}</span>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-
-              <div style={styles.sectionDivider} />
-              <ScheduleEditorPanel />
             </div>
-          </div>
 
-          {/* Page 2: Social */}
-          <div style={styles.pagerPage}>
-            <div style={styles.sheetContent}>
-              <GroupsPanel />
+            {/* Page 1: My Day (Before Class) */}
+            <div style={styles.pagerPage}>
+              <div style={styles.sheetContent}>
+                <div style={styles.heroBlock}>
+                  <p style={styles.eyebrow}>{myDayCopy.eyebrow}</p>
+                  <h2 style={styles.title}>{myDayCopy.title}</h2>
+                  <p style={styles.body}>{myDayCopy.body}</p>
+                </div>
+
+                {activeHall && nextClass ? (
+                  <div style={styles.primaryCard}>
+                    <div style={styles.primaryHeader}>
+                      <div style={styles.primaryTitleWrap}>
+                        <h3 style={styles.primaryTitle}>{activeHall.name}</h3>
+                        <p style={styles.primaryMeta}>
+                          {activeHall.category ?? 'Dining Spot'} | {getStatusLabel(activeHall)}
+                        </p>
+                      </div>
+                      <span style={styles.recommendedBadge}>Recommended</span>
+                    </div>
+
+                    {activeDistance ? (
+                      <div style={styles.infoRow}>
+                        <span style={styles.infoIcon}>Walk</span>
+                        <span style={styles.infoText}>{activeDistance}</span>
+                      </div>
+                    ) : null}
+
+                    <div style={styles.infoRow}>
+                      <span style={styles.infoIcon}>Class</span>
+                      <span style={styles.infoText}>Planning around {nextClass.building}</span>
+                    </div>
+                  </div>
+                ) : null}
+
+                <div style={styles.sectionHeader}>
+                  <h3 style={styles.sectionTitle}>Dining Places</h3>
+                  <p style={styles.sectionCaption}>Closest options before your next class.</p>
+                </div>
+
+                <div style={styles.placeList}>
+                  {places.map((hall) => {
+                    const selected = hall.id === selectedHall?.id;
+                    const recommended = hall.id === suggestion?.id;
+                    const distance =
+                      userLocation && hall.coordinates
+                        ? formatDistanceMiles(
+                            getDistanceKm(
+                              userLocation.latitude,
+                              userLocation.longitude,
+                              hall.coordinates.latitude,
+                              hall.coordinates.longitude
+                            )
+                          )
+                        : null;
+
+                    return (
+                      <button
+                        key={hall.id}
+                        style={{
+                          ...styles.placeRow,
+                          ...(selected ? styles.placeRowSelected : null),
+                        }}
+                        onClick={() => {
+                          router.push(`/restaurant/${hall.id}`);
+                          focusMapOnHall(hall);
+                        }}>
+                        <div style={styles.placeRowMain}>
+                          <div style={styles.placeIconWrap}>
+                            <span
+                              style={{
+                                ...styles.placeIcon,
+                                color: recommended ? '#2F6FED' : hall.status?.isOpen ? '#1B8B4B' : '#B44A4A',
+                              }}>
+                              Eat
+                            </span>
+                          </div>
+                          <div style={styles.placeCopy}>
+                            <div style={styles.placeTitleRow}>
+                              <span style={styles.placeName}>{hall.name}</span>
+                              {recommended ? <span style={styles.inlineBadge}>For you</span> : null}
+                            </div>
+                            <span style={styles.placeMeta}>
+                              {hall.category ?? 'Dining Spot'} | {getStatusLabel(hall)}
+                              {distance ? ` | ${distance}` : ''}
+                            </span>
+                          </div>
+                        </div>
+                        <span style={styles.placeChevron}>{'>'}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div style={styles.sectionDivider} />
+                <ScheduleEditorPanel />
+              </div>
             </div>
-          </div>
 
-          {/* Page 3: Me */}
-          <div style={styles.pagerPage}>
-            <div style={styles.sheetContent}>
-              <div style={styles.heroBlock}>
-                <p style={styles.eyebrow}>Profile</p>
-                <h2 style={styles.title}>Me</h2>
-                <p style={styles.body}>Your profile, preferences, and settings will live here.</p>
+            {/* Page 2: Social */}
+            <div style={styles.pagerPage}>
+              <div style={styles.sheetContent}>
+                <GroupsPanel />
+              </div>
+            </div>
+
+            {/* Page 3: Me */}
+            <div style={styles.pagerPage}>
+              <div style={styles.sheetContent}>
+                <MePanel />
               </div>
             </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );
@@ -739,6 +1194,44 @@ const styles = {
   },
   pinGlyph: {
     fontSize: 16,
+    lineHeight: 1,
+  },
+  markerBadge: {
+    position: 'absolute',
+    top: -6,
+    right: -8,
+    backgroundColor: '#DC2626',
+    borderRadius: 10,
+    minWidth: 18,
+    height: 18,
+    padding: '0 4px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    border: '1.5px solid white',
+    boxShadow: '0 2px 4px rgba(0,0,0,0.15)',
+    zIndex: 2,
+  },
+  clusterBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -6,
+    backgroundColor: '#D98A2B',
+    borderRadius: 10,
+    minWidth: 18,
+    height: 18,
+    padding: '0 4px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    border: '1.5px solid white',
+    boxShadow: '0 2px 4px rgba(0,0,0,0.15)',
+    zIndex: 2,
+  },
+  markerBadgeText: {
+    color: 'white',
+    fontSize: 10,
+    fontWeight: '800',
     lineHeight: 1,
   },
   clusterBubble: {
@@ -827,12 +1320,18 @@ const styles = {
     margin: '0 auto',
   },
   pageTabsWrap: {
+    flex: 1,
     backgroundColor: '#ECE6E0',
     borderRadius: 18,
     padding: 4,
     display: 'grid',
     gridTemplateColumns: '1fr 1fr 1fr 1fr',
     gap: 3,
+  },
+  sheetControlsRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 10,
   },
   pageTabButton: {
     minHeight: 38,
@@ -855,6 +1354,19 @@ const styles = {
   pageTabLabelActive: {
     color: '#2B2320',
   },
+  minimizeButton: {
+    minHeight: 38,
+    borderRadius: 14,
+    border: '1px solid #E2D9D2',
+    backgroundColor: '#FFFFFF',
+    color: '#5D514C',
+    fontSize: 12,
+    fontWeight: 700,
+    padding: '0 12px',
+    cursor: 'pointer',
+    boxShadow: '0 2px 6px rgba(30,26,23,0.08)',
+    whiteSpace: 'nowrap',
+  },
   pagerScroll: {
     flex: 1,
     display: 'flex',
@@ -873,6 +1385,13 @@ const styles = {
     overflowY: 'auto',
   },
   sheetContent: {
+    padding: '0 18px 28px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 16,
+  },
+  focusedSheetContent: {
+    overflowY: 'auto',
     padding: '0 18px 28px',
     display: 'flex',
     flexDirection: 'column',
@@ -913,10 +1432,132 @@ const styles = {
     backgroundColor: '#FFFFFF',
     borderRadius: 24,
     padding: 18,
-    boxShadow: '0 8px 18px rgba(30,26,23,0.06)',
+    border: '1px solid #EFE6DE',
     display: 'flex',
     flexDirection: 'column',
     gap: 12,
+  },
+  focusedPrimaryCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 18,
+    boxShadow: '0 16px 36px rgba(80,0,0,0.16), 0 6px 16px rgba(80,0,0,0.10)',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 12,
+  },
+  inviteCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 18,
+    boxShadow: '0 16px 36px rgba(80,0,0,0.16), 0 6px 16px rgba(80,0,0,0.10)',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 14,
+  },
+  clusterListCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 18,
+    boxShadow: '0 16px 36px rgba(80,0,0,0.16), 0 6px 16px rgba(80,0,0,0.10)',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 14,
+  },
+  inviteHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  inviteEyebrow: {
+    margin: 0,
+    fontSize: 12,
+    fontWeight: 700,
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+    color: '#8A7B74',
+  },
+  inviteCountBadge: {
+    backgroundColor: '#FFF3E3',
+    color: '#A45B1C',
+    borderRadius: 999,
+    padding: '6px 10px',
+    fontSize: 11,
+    fontWeight: 700,
+    whiteSpace: 'nowrap',
+  },
+  inviteList: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 10,
+  },
+  inviteRow: {
+    borderRadius: 18,
+    backgroundColor: '#FBF8F4',
+    border: '1px solid #EFE6DE',
+    padding: 14,
+  },
+  inviteCopy: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 4,
+  },
+  inviteTopLine: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  inviteName: {
+    fontSize: 15,
+    fontWeight: 700,
+    color: '#2B2320',
+  },
+  inviteStatus: {
+    fontSize: 11,
+    fontWeight: 700,
+    color: '#A45B1C',
+    backgroundColor: '#FFF3E3',
+    borderRadius: 999,
+    padding: '4px 8px',
+    whiteSpace: 'nowrap',
+  },
+  inviteMeta: {
+    fontSize: 12,
+    color: '#7A6E69',
+    lineHeight: 1.4,
+  },
+  inviteMessage: {
+    fontSize: 13,
+    color: '#564B46',
+    lineHeight: 1.45,
+  },
+  inviteActions: {
+    display: 'flex',
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 6,
+  },
+  acceptInviteButton: {
+    border: '1px solid #BBF7D0',
+    backgroundColor: '#F0FDF4',
+    color: '#15803D',
+    borderRadius: 999,
+    padding: '8px 12px',
+    fontSize: 12,
+    fontWeight: 700,
+    cursor: 'pointer',
+  },
+  declineInviteButton: {
+    border: '1px solid #FECACA',
+    backgroundColor: '#FEF2F2',
+    color: '#B91C1C',
+    borderRadius: 999,
+    padding: '8px 12px',
+    fontSize: 12,
+    fontWeight: 700,
+    cursor: 'pointer',
   },
   primaryHeader: {
     display: 'flex',
@@ -1052,6 +1693,14 @@ const styles = {
   inlineBadge: {
     backgroundColor: '#F3E7E0',
     color: '#7A4333',
+    borderRadius: 999,
+    padding: '4px 8px',
+    fontSize: 10,
+    fontWeight: 700,
+  },
+  clusterInlineBadge: {
+    backgroundColor: '#FFF3E3',
+    color: '#A45B1C',
     borderRadius: 999,
     padding: '4px 8px',
     fontSize: 10,

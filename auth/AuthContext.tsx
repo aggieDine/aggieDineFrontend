@@ -52,22 +52,28 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     loadUser();
   }, []);
 
-  // Real sign-in: decode Cognito ID token and persist user
+  // Real sign-in: decode Cognito ID token, verify @tamu.edu, and persist user
   const signInWithToken = async (idToken: string) => {
     setIsLoading(true);
     try {
       const payload = decodeJWTPayload(idToken);
+      const email = (payload.email || '').toLowerCase();
+
+      if (!email.endsWith('@tamu.edu')) {
+        throw new Error('Only @tamu.edu emails are allowed.');
+      }
+
       const newUser: User = {
         uid: payload.sub,
-        email: payload.email,
-        displayName: payload.name || payload.email,
+        email,
+        displayName: payload.name || email,
       };
       setUser(newUser);
       await AsyncStorage.setItem('user', JSON.stringify(newUser));
       await AsyncStorage.setItem('idToken', idToken);
-    } catch (e) {
+    } catch (e: any) {
       console.error('Failed to sign in with token', e);
-      throw new Error('Failed to sign in');
+      throw e;
     } finally {
       setIsLoading(false);
     }
