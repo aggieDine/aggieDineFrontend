@@ -1,0 +1,477 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useEffect, useState } from 'react';
+import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+
+import { InfoBanner, PrimaryButton, SecondaryButton } from '../ui/action-controls';
+import { EmptyState, HeroHeader, SectionTitle, SurfaceCard } from '../ui/app-surface';
+
+const DINING_SPOTS = [
+  'Sbisa Dining Hall',
+  'The Commons',
+  "Rev's Grille",
+  'Panda Express',
+  'Chick-fil-A',
+  'Starbucks (MSC)',
+  'Duncan Dining Hall',
+  'Hullabaloo Cafe',
+];
+
+const STORAGE_KEY = 'groupInvites';
+
+export default function GroupsPanel({ style }) {
+  const [invites, setInvites] = useState([]);
+  const [showForm, setShowForm] = useState(false);
+  const [restaurant, setRestaurant] = useState('');
+  const [date, setDate] = useState('');
+  const [time, setTime] = useState('');
+  const [message, setMessage] = useState('');
+  const [friendName, setFriendName] = useState('');
+  const [error, setError] = useState('');
+  const [showRestaurantPicker, setShowRestaurantPicker] = useState(false);
+
+  useEffect(() => {
+    loadInvites();
+  }, []);
+
+  const loadInvites = async () => {
+    try {
+      const stored = await AsyncStorage.getItem(STORAGE_KEY);
+      if (stored) setInvites(JSON.parse(stored));
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const saveInvites = async (updated) => {
+    setInvites(updated);
+    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+  };
+
+  const createInvite = async () => {
+    setError('');
+
+    if (!restaurant.trim()) {
+      setError('Pick a dining spot.');
+      return;
+    }
+
+    if (!date.trim()) {
+      setError('Enter a date like 04/15.');
+      return;
+    }
+
+    if (!time.trim()) {
+      setError('Enter a time.');
+      return;
+    }
+
+    const newInvite = {
+      id: Date.now().toString(),
+      restaurant: restaurant.trim(),
+      date: date.trim(),
+      time: time.trim(),
+      message: message.trim(),
+      friendName: friendName.trim() || 'Open Invite',
+      status: 'pending',
+      createdAt: new Date().toISOString(),
+    };
+
+    const updated = [newInvite, ...invites];
+    await saveInvites(updated);
+
+    setRestaurant('');
+    setDate('');
+    setTime('');
+    setMessage('');
+    setFriendName('');
+    setShowForm(false);
+    setError('');
+  };
+
+  const updateStatus = async (id, newStatus) => {
+    const updated = invites.map((invite) =>
+      invite.id === id ? { ...invite, status: newStatus } : invite
+    );
+    await saveInvites(updated);
+  };
+
+  const deleteInvite = async (id) => {
+    const updated = invites.filter((invite) => invite.id !== id);
+    await saveInvites(updated);
+  };
+
+  const getStatusColor = (status) => {
+    switch (status) {
+      case 'accepted':
+        return '#16A34A';
+      case 'declined':
+        return '#DC2626';
+      default:
+        return '#F59E0B';
+    }
+  };
+
+  const getStatusBg = (status) => {
+    switch (status) {
+      case 'accepted':
+        return '#F0FDF4';
+      case 'declined':
+        return '#FEF2F2';
+      default:
+        return '#FFFBEB';
+    }
+  };
+
+  const filteredRestaurants = restaurant.trim()
+    ? DINING_SPOTS.filter((item) => item.toLowerCase().includes(restaurant.toLowerCase()))
+    : DINING_SPOTS;
+
+  return (
+    <View style={[styles.panel, style]}>
+      <HeroHeader
+        eyebrow="Social Layer"
+        title="Invite people to eat"
+        subtitle="This is where the product starts to feel alive. Keep the form quick, friendly, and easy to use with one hand on a phone."
+      />
+
+      <InfoBanner
+        title="For the web launch"
+        body="Focus on fast invite creation and clear status cards. The backend can make it truly multi-user later without changing this overall flow."
+      />
+
+      {!showForm ? (
+        <PrimaryButton label="Create invite" onPress={() => setShowForm(true)} style={styles.topButton} />
+      ) : (
+        <SurfaceCard style={styles.form}>
+          <View style={styles.formHeader}>
+            <SectionTitle style={styles.formTitle}>New invite</SectionTitle>
+            <Pressable onPress={() => setShowForm(false)} style={styles.closeButton}>
+              <Text style={styles.closeText}>Close</Text>
+            </Pressable>
+          </View>
+
+          <Text style={styles.label}>Dining spot</Text>
+          <View style={styles.autocompleteWrap}>
+            <TextInput
+              style={styles.input}
+              placeholder="Search dining spots..."
+              placeholderTextColor="#999"
+              value={restaurant}
+              onChangeText={(value) => {
+                setRestaurant(value);
+                setShowRestaurantPicker(true);
+              }}
+              onFocus={() => setShowRestaurantPicker(true)}
+              onBlur={() => setTimeout(() => setShowRestaurantPicker(false), 200)}
+            />
+
+            {showRestaurantPicker && filteredRestaurants.length > 0 ? (
+              <View style={styles.dropdown}>
+                {filteredRestaurants.map((item) => (
+                  <Pressable
+                    key={item}
+                    style={styles.dropdownItem}
+                    onPress={() => {
+                      setRestaurant(item);
+                      setShowRestaurantPicker(false);
+                    }}>
+                    <Text style={styles.dropdownText}>{item}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            ) : null}
+          </View>
+
+          <View style={styles.row}>
+            <View style={styles.halfCol}>
+              <Text style={styles.label}>Date</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="MM/DD"
+                placeholderTextColor="#999"
+                value={date}
+                onChangeText={setDate}
+                maxLength={5}
+              />
+            </View>
+
+            <View style={styles.halfCol}>
+              <Text style={styles.label}>Time</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="12:30"
+                placeholderTextColor="#999"
+                value={time}
+                onChangeText={setTime}
+                maxLength={5}
+                keyboardType={Platform.OS === 'web' ? 'default' : 'numeric'}
+              />
+            </View>
+          </View>
+
+          <Text style={styles.label}>Invite who? (optional)</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="Friend's name or leave blank for an open invite"
+            placeholderTextColor="#999"
+            value={friendName}
+            onChangeText={setFriendName}
+          />
+
+          <Text style={styles.label}>Message (optional)</Text>
+          <TextInput
+            style={[styles.input, styles.textArea]}
+            placeholder="e.g. Let's grab lunch after class"
+            placeholderTextColor="#999"
+            value={message}
+            onChangeText={setMessage}
+            multiline
+            numberOfLines={3}
+          />
+
+          {error ? <Text style={styles.errorText}>{error}</Text> : null}
+
+          <PrimaryButton label="Send invite" onPress={createInvite} style={styles.submitButton} />
+        </SurfaceCard>
+      )}
+
+      <SectionTitle>{invites.length > 0 ? 'Your invites' : 'Invite activity'}</SectionTitle>
+
+      {invites.length === 0 && !showForm ? (
+        <EmptyState
+          title="No invites yet"
+          subtitle="Start simple: create one lunch invite for this week and see how the flow feels on a phone."
+          action={<SecondaryButton label="Start with lunch" onPress={() => setShowForm(true)} />}
+        />
+      ) : (
+        <View style={styles.cardList}>
+          {invites.map((invite) => (
+            <SurfaceCard key={invite.id} style={styles.card}>
+              <View style={styles.cardTop}>
+                <View style={styles.cardHeader}>
+                  <Text style={styles.cardRestaurant}>{invite.restaurant}</Text>
+                  <View style={[styles.statusBadge, { backgroundColor: getStatusBg(invite.status) }]}>
+                    <Text style={[styles.statusText, { color: getStatusColor(invite.status) }]}>
+                      {invite.status.charAt(0).toUpperCase() + invite.status.slice(1)}
+                    </Text>
+                  </View>
+                </View>
+
+                <Text style={styles.cardMeta}>
+                  {invite.date} | {invite.time} | {invite.friendName}
+                </Text>
+
+                {invite.message ? (
+                  <Text style={styles.cardMessage}>{`"${invite.message}"`}</Text>
+                ) : null}
+              </View>
+
+              <View style={styles.cardActions}>
+                {invite.status === 'pending' ? (
+                  <>
+                    <Pressable style={styles.acceptBtn} onPress={() => updateStatus(invite.id, 'accepted')}>
+                      <Text style={styles.acceptText}>Accept</Text>
+                    </Pressable>
+                    <Pressable style={styles.declineBtn} onPress={() => updateStatus(invite.id, 'declined')}>
+                      <Text style={styles.declineText}>Decline</Text>
+                    </Pressable>
+                  </>
+                ) : null}
+
+                <Pressable style={styles.removeBtn} onPress={() => deleteInvite(invite.id)}>
+                  <Text style={styles.removeText}>Delete</Text>
+                </Pressable>
+              </View>
+            </SurfaceCard>
+          ))}
+        </View>
+      )}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  panel: {
+    width: '100%',
+  },
+  topButton: {
+    marginBottom: 24,
+  },
+  form: {
+    marginBottom: 24,
+  },
+  formHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 2,
+  },
+  formTitle: {
+    marginBottom: 0,
+  },
+  closeButton: {
+    backgroundColor: '#F3E7E0',
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  closeText: {
+    color: '#7A4333',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  label: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#500000',
+    marginTop: 14,
+    marginBottom: 6,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  autocompleteWrap: {
+    zIndex: 10,
+  },
+  input: {
+    width: '100%',
+    backgroundColor: '#F8F5F0',
+    padding: 14,
+    borderRadius: 12,
+    fontSize: 15,
+    borderWidth: 1,
+    borderColor: '#E8E2DA',
+    color: '#333',
+  },
+  textArea: {
+    minHeight: 88,
+    textAlignVertical: 'top',
+  },
+  row: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  halfCol: {
+    flex: 1,
+  },
+  dropdown: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E8E2DA',
+    marginTop: 6,
+    maxHeight: 180,
+    overflow: 'hidden',
+    ...(Platform.OS === 'web'
+      ? { position: 'absolute', top: 54, left: 0, right: 0, zIndex: 10 }
+      : {}),
+  },
+  dropdownItem: {
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0ECE6',
+  },
+  dropdownText: {
+    fontSize: 14,
+    color: '#333',
+  },
+  errorText: {
+    color: '#DC2626',
+    fontSize: 13,
+    marginTop: 10,
+    fontWeight: '500',
+  },
+  submitButton: {
+    marginTop: 20,
+  },
+  cardList: {
+    gap: 12,
+  },
+  card: {
+    padding: 18,
+  },
+  cardTop: {
+    marginBottom: 12,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: 10,
+    marginBottom: 8,
+  },
+  cardRestaurant: {
+    flex: 1,
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#333',
+  },
+  statusBadge: {
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: 999,
+  },
+  statusText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  cardMeta: {
+    fontSize: 13,
+    color: '#777',
+    marginBottom: 4,
+    lineHeight: 18,
+  },
+  cardMessage: {
+    fontSize: 13,
+    color: '#555',
+    fontStyle: 'italic',
+    marginTop: 6,
+    lineHeight: 19,
+  },
+  cardActions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#F0ECE6',
+    paddingTop: 12,
+  },
+  acceptBtn: {
+    backgroundColor: '#F0FDF4',
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+  },
+  acceptText: {
+    color: '#16A34A',
+    fontWeight: '700',
+    fontSize: 13,
+  },
+  declineBtn: {
+    backgroundColor: '#FEF2F2',
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#FECACA',
+  },
+  declineText: {
+    color: '#DC2626',
+    fontWeight: '700',
+    fontSize: 13,
+  },
+  removeBtn: {
+    marginLeft: 'auto',
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    backgroundColor: '#F8F5F0',
+  },
+  removeText: {
+    color: '#6B615C',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+});

@@ -1,0 +1,115 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import React, { createContext, ReactNode, useContext, useEffect, useState } from 'react';
+
+// 1. Define the User shape
+interface User {
+  uid: string;
+  email: string;
+  displayName: string;
+}
+
+// 2. Define the Context shape
+interface AuthContextType {
+  user: User | null;
+  isLoading: boolean;
+  signIn: (email?: string) => Promise<void>;
+  signInWithToken: (idToken: string) => Promise<void>;
+  signOut: () => Promise<void>;
+}
+
+// Cognito configuration — exported so the login screen can use it
+export const COGNITO_CONFIG = {
+  domain: 'https://us-east-2zmjwkelq8.auth.us-east-2.amazoncognito.com',
+  clientId: '3ej69tpgi4021sg00rhe4t36ma',
+};
+
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+function decodeJWTPayload(token: string) {
+  const base64Url = token.split('.')[1];
+  const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+  return JSON.parse(atob(base64));
+}
+
+export const AuthProvider = ({ children }: { children: ReactNode }) => {
+  const [user, setUser] = useState<User | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Load user on mount
+  useEffect(() => {
+    const loadUser = async () => {
+      try {
+        const storedUser = await AsyncStorage.getItem('user');
+        if (storedUser) {
+          setUser(JSON.parse(storedUser));
+        }
+      } catch (e) {
+        console.error('Failed to load user', e);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    loadUser();
+  }, []);
+
+  // Real sign-in: decode Cognito ID token and persist user
+  const signInWithToken = async (idToken: string) => {
+    setIsLoading(true);
+    try {
+      const payload = decodeJWTPayload(idToken);
+      const newUser: User = {
+        uid: payload.sub,
+        email: payload.email,
+        displayName: payload.name || payload.email,
+      };
+      setUser(newUser);
+      await AsyncStorage.setItem('user', JSON.stringify(newUser));
+      await AsyncStorage.setItem('idToken', idToken);
+    } catch (e) {
+      console.error('Failed to sign in with token', e);
+      throw new Error('Failed to sign in');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Dev login — bypasses OAuth for local development
+  const signIn = async (email: string = 'dev@tamu.edu') => {
+    setIsLoading(true);
+    await new Promise((resolve) => setTimeout(resolve, 500));
+
+    if (email.toLowerCase().endsWith('@tamu.edu')) {
+      const newUser: User = {
+        uid: 'dev-12345',
+        email: email.toLowerCase(),
+        displayName: 'Dev User',
+      };
+      setUser(newUser);
+      await AsyncStorage.setItem('user', JSON.stringify(newUser));
+    } else {
+      setIsLoading(false);
+      throw new Error('Invalid credentials. Use a @tamu.edu email.');
+    }
+    setIsLoading(false);
+  };
+
+  const signOut = async () => {
+    setUser(null);
+    await AsyncStorage.multiRemove(['user', 'idToken']);
+  };
+
+  return (
+    <AuthContext.Provider value={{ user, isLoading, signIn, signInWithToken, signOut }}>
+      {children}
+    </AuthContext.Provider>
+  );
+};
+
+// 3. Custom Hook for easy access
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
+};
