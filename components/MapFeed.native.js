@@ -131,6 +131,7 @@ export default function MapFeed({
   const [selectedHall, setSelectedHall] = useState(null);
   const [activePageIndex, setActivePageIndex] = useState(0);
   const [groupInvites, setGroupInvites] = useState([]);
+  const [isSheetLow, setIsSheetLow] = useState(false);
 
   const bottomOffset = Math.max(insets.bottom, 10) + 12;
   const sheetHeight = Math.min(Math.max(height * 0.68, 320), 520);
@@ -148,14 +149,20 @@ export default function MapFeed({
   );
 
   useEffect(() => {
+    let lastState = false;
     const id = translateY.addListener(({ value }) => {
       currentOffsetRef.current = value;
+      const low = value > (detents.medium + detents.collapsed) / 2;
+      if (low !== lastState) {
+        lastState = low;
+        setIsSheetLow(low);
+      }
     });
 
     return () => {
       translateY.removeListener(id);
     };
-  }, [translateY]);
+  }, [detents.collapsed, detents.medium, translateY]);
 
   const snapTo = useCallback(
     (position) => {
@@ -420,6 +427,14 @@ export default function MapFeed({
     snapTo('collapsed');
   }, [snapTo]);
 
+  const toggleSheet = useCallback(() => {
+    if (isSheetLow) {
+      snapTo('expanded');
+    } else {
+      minimizeSheet();
+    }
+  }, [isSheetLow, minimizeSheet, snapTo]);
+
   const focusMapOnHall = useCallback((hall) => {
     if (!hall?.coordinates || !mapRef.current) return;
 
@@ -513,16 +528,28 @@ export default function MapFeed({
         </Pressable>
       ) : null}
 
-      <Animated.View
-        style={[
-          styles.sheet,
-          {
-            height: sheetHeight,
-            bottom: bottomOffset,
-            transform: [{ translateY }],
-          },
-        ]}>
-        <View style={styles.sheetGrabZone}>
+      <View
+        style={{
+          position: 'absolute',
+          left: -40,
+          right: -40,
+          top: 0,
+          bottom: bottomOffset,
+          overflow: 'hidden',
+        }}
+        pointerEvents="box-none">
+        <Animated.View
+          style={[
+            styles.sheet,
+            {
+              height: sheetHeight,
+              bottom: 0,
+              left: 52,
+              right: 52,
+              transform: [{ translateY }],
+            },
+          ]}>
+          <View style={styles.sheetGrabZone}>
           <View style={styles.grabberWrap} {...panResponder.panHandlers}>
             <View style={styles.grabber} />
           </View>
@@ -548,8 +575,8 @@ export default function MapFeed({
                 );
               })}
             </View>
-            <Pressable style={styles.minimizeButton} onPress={minimizeSheet}>
-              <Text style={styles.minimizeButtonText}>Minimize</Text>
+            <Pressable style={styles.minimizeButton} onPress={toggleSheet}>
+              <Text style={styles.minimizeButtonText}>{isSheetLow ? 'Maximize' : 'Minimize'}</Text>
             </Pressable>
           </View>
         </View>
@@ -610,6 +637,12 @@ export default function MapFeed({
                   <Text style={styles.infoText}>Anchored to your live location</Text>
                 </View>
               )}
+
+              <Pressable
+                style={styles.menuButton}
+                onPress={() => openDetail(selectedHall)}>
+                <Text style={styles.menuButtonText}>View Menu</Text>
+              </Pressable>
             </View>
 
             {selectedHallInvites.length > 0 ? (
@@ -817,6 +850,7 @@ export default function MapFeed({
           </ScrollView>
         )}
       </Animated.View>
+      </View>
     </View>
   );
 }
@@ -1059,6 +1093,19 @@ const styles = StyleSheet.create({
     gap: 14,
     boxShadow: '0px 16px 36px rgba(80, 0, 0, 0.16)',
     elevation: 6,
+  },
+  menuButton: {
+    marginTop: 8,
+    backgroundColor: '#500000',
+    borderRadius: 999,
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  menuButtonText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '700',
   },
   inviteHeader: {
     flexDirection: 'row',

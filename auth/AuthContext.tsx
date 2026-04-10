@@ -11,6 +11,7 @@ interface User {
 // 2. Define the Context shape
 interface AuthContextType {
   user: User | null;
+  idToken: string | null;
   isLoading: boolean;
   signIn: (email?: string) => Promise<void>;
   signInWithToken: (idToken: string) => Promise<void>;
@@ -33,6 +34,7 @@ function decodeJWTPayload(token: string) {
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
+  const [idToken, setIdToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   // Load user on mount
@@ -40,8 +42,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const loadUser = async () => {
       try {
         const storedUser = await AsyncStorage.getItem('user');
+        const storedToken = await AsyncStorage.getItem('idToken');
         if (storedUser) {
           setUser(JSON.parse(storedUser));
+        }
+        if (storedToken) {
+          setIdToken(storedToken);
         }
       } catch (e) {
         console.error('Failed to load user', e);
@@ -69,6 +75,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         displayName: payload.name || email,
       };
       setUser(newUser);
+      setIdToken(idToken);
       await AsyncStorage.setItem('user', JSON.stringify(newUser));
       await AsyncStorage.setItem('idToken', idToken);
     } catch (e: any) {
@@ -101,11 +108,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const signOut = async () => {
     setUser(null);
+    setIdToken(null);
     await AsyncStorage.multiRemove(['user', 'idToken']);
   };
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, signIn, signInWithToken, signOut }}>
+    <AuthContext.Provider value={{ user, idToken, isLoading, signIn, signInWithToken, signOut }}>
       {children}
     </AuthContext.Provider>
   );

@@ -11,13 +11,13 @@ const CACHE_KEY = 'cachedMenuData';
 const DiningDataContext = createContext(undefined);
 
 export function DiningDataProvider({ children }) {
-  const { user } = useAuth();
+  const { user, idToken } = useAuth();
   const [diningHalls, setDiningHalls] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [lastUpdated, setLastUpdated] = useState(null);
 
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (token) => {
     setIsLoading(true);
     setError(null);
 
@@ -35,8 +35,7 @@ export function DiningDataProvider({ children }) {
 
     // 2. Fetch fresh data from the menu API
     try {
-      const idToken = await AsyncStorage.getItem('idToken');
-      const apiData = await fetchMenuData({}, idToken);
+      const apiData = await fetchMenuData({}, token);
       if (apiData) {
         const transformed = transformS3Data(apiData);
         setDiningHalls(transformed);
@@ -64,8 +63,8 @@ export function DiningDataProvider({ children }) {
   }, []);
 
   useEffect(() => {
-    if (user) loadData();
-  }, [user, loadData]);
+    if (user) loadData(idToken);
+  }, [user, idToken, loadData]);
 
   const getDiningHallById = useCallback(
     (id) => diningHalls.find((hall) => hall.id === id) ?? null,

@@ -130,9 +130,10 @@ export default function MapFeed({
   const [isDragging, setIsDragging] = useState(false);
   const [activePageIndex, setActivePageIndex] = useState(0);
   const [groupInvites, setGroupInvites] = useState([]);
+  const [isMyDayPlacesExpanded, setIsMyDayPlacesExpanded] = useState(false);
 
   const detents = useMemo(() => {
-    const collapsedVisible = 86;
+    const collapsedVisible = 130;
     const mediumVisible = Math.min(Math.max(sheetHeight * 0.5, 250), 340);
 
     return {
@@ -348,7 +349,7 @@ export default function MapFeed({
   }, []);
 
   useEffect(() => {
-    snapTo(selectedHall || selectedCluster ? 'expanded' : 'medium');
+    snapTo(selectedCluster ? 'expanded' : 'medium');
   }, [selectedCluster, selectedHall, snapTo]);
 
   const focusMapOnHall = useCallback((hall) => {
@@ -367,7 +368,7 @@ export default function MapFeed({
         setSelectedCluster(null);
         setSelectedHall(cluster.items[0]);
         focusMapOnHall(cluster.items[0]);
-        setSheetOffset(detents.expanded);
+        setSheetOffset(detents.medium);
         return;
       }
 
@@ -400,6 +401,16 @@ export default function MapFeed({
   const minimizeSheet = useCallback(() => {
     setSheetOffset(detents.collapsed);
   }, [detents.collapsed]);
+
+  const isSheetLow = sheetOffset > (detents.medium + detents.collapsed) / 2;
+
+  const toggleSheet = useCallback(() => {
+    if (isSheetLow) {
+      snapTo('expanded');
+    } else {
+      minimizeSheet();
+    }
+  }, [isSheetLow, minimizeSheet, snapTo]);
 
   const releaseDrag = useCallback(
     (clientY, velocity = 0) => {
@@ -702,12 +713,20 @@ export default function MapFeed({
       ) : null}
 
       <div
-        ref={sheetRef}
         style={{
           ...styles.sheet,
-          transform: `translateY(${sheetOffset}px)`,
-          transition: isDragging ? 'none' : 'transform 260ms cubic-bezier(0.22, 1, 0.36, 1)',
+          height: `max(60px, calc(min(72vh, 540px) - ${sheetOffset}px))`,
+          transition: isDragging ? 'none' : 'height 260ms cubic-bezier(0.22, 1, 0.36, 1)',
         }}>
+        <div
+          ref={sheetRef}
+          style={{
+            height: 'min(72vh, 540px)',
+            width: '100%',
+            flexShrink: 0,
+            display: 'flex',
+            flexDirection: 'column',
+          }}>
         <div style={styles.sheetDragArea}>
           <div
             style={styles.grabberWrap}
@@ -719,40 +738,9 @@ export default function MapFeed({
             <div style={styles.grabber} />
           </div>
           <div style={styles.sheetControlsRow}>
-            <div style={styles.pageTabsWrap}>
-              {PAGE_TABS.map((tab, index) => {
-                const selected = activePageIndex === index;
-                return (
-                  <button
-                    key={tab.key}
-                    style={{
-                      ...styles.pageTabButton,
-                      ...(selected ? styles.pageTabButtonActive : null),
-                    }}
-                    onClick={() => {
-                      if (selectedHall || selectedCluster) return;
-                      setActivePageIndex(index);
-                      setSheetOffset(detents.expanded);
-                      if (index === EXPLORE_PAGE_INDEX) onRecommendationModeChange?.('location');
-                      else if (index === MY_DAY_PAGE_INDEX) onRecommendationModeChange?.('schedule');
-                      if (pagerRef.current) {
-                        const pageWidth = pagerRef.current.offsetWidth;
-                        pagerRef.current.scrollTo({ left: pageWidth * index, behavior: 'smooth' });
-                      }
-                    }}>
-                    <span
-                      style={{
-                        ...styles.pageTabLabel,
-                        ...(selected ? styles.pageTabLabelActive : null),
-                      }}>
-                      {tab.label}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-            <button style={styles.minimizeButton} onClick={minimizeSheet} aria-label="Minimize sheet">
-              V
+            <div style={{ flex: 1 }} />
+            <button style={styles.minimizeButton} onClick={toggleSheet} aria-label={isSheetLow ? "Maximize sheet" : "Minimize sheet"}>
+              {isSheetLow ? "^" : "V"}
             </button>
           </div>
         </div>
@@ -813,6 +801,12 @@ export default function MapFeed({
                   <span style={styles.infoText}>Anchored to your live location</span>
                 </div>
               )}
+
+              <button
+                style={styles.menuButton}
+                onClick={() => router.push(`/restaurant/${selectedHall.id}`)}>
+                View Menu
+              </button>
             </div>
 
             {selectedHallInvites.length > 0 ? (
@@ -1091,12 +1085,21 @@ export default function MapFeed({
                   </div>
                 ) : null}
 
-                <div style={styles.sectionHeader}>
-                  <h3 style={styles.sectionTitle}>Dining Places</h3>
-                  <p style={styles.sectionCaption}>Closest options before your next class.</p>
+                <div
+                  style={{...styles.sectionHeader, cursor: 'pointer', display: 'flex', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center'}}
+                  onClick={() => setIsMyDayPlacesExpanded(!isMyDayPlacesExpanded)}
+                >
+                  <div>
+                    <h3 style={styles.sectionTitle}>Dining Places</h3>
+                    <p style={styles.sectionCaption}>Closest options before your next class.</p>
+                  </div>
+                  <span style={{ color: '#9A8F89', fontWeight: 'bold', fontSize: 16 }}>
+                    {isMyDayPlacesExpanded ? '^' : 'V'}
+                  </span>
                 </div>
 
-                <div style={styles.placeList}>
+                {isMyDayPlacesExpanded && (
+                  <div style={styles.placeList}>
                   {places.map((hall) => {
                     const selected = hall.id === selectedHall?.id;
                     const recommended = hall.id === suggestion?.id;
@@ -1148,7 +1151,8 @@ export default function MapFeed({
                       </button>
                     );
                   })}
-                </div>
+                  </div>
+                )}
 
                 <div style={styles.sectionDivider} />
                 <ScheduleEditorPanel />
@@ -1170,6 +1174,44 @@ export default function MapFeed({
             </div>
           </div>
         )}
+        </div>
+      </div>
+
+      {/* Floating Tab Bar */}
+      <div style={styles.floatingTabBar}>
+        <div style={styles.pageTabsWrap}>
+          {PAGE_TABS.map((tab, index) => {
+            const selected = activePageIndex === index;
+            return (
+              <button
+                key={tab.key}
+                style={{
+                  ...styles.pageTabButton,
+                  ...(selected ? styles.pageTabButtonActive : null),
+                }}
+                onClick={() => {
+                  setSelectedHall(null);
+                  setSelectedCluster(null);
+                  setActivePageIndex(index);
+                  setSheetOffset(detents.expanded);
+                  if (index === EXPLORE_PAGE_INDEX) onRecommendationModeChange?.('location');
+                  else if (index === MY_DAY_PAGE_INDEX) onRecommendationModeChange?.('schedule');
+                  if (pagerRef.current) {
+                    const pageWidth = pagerRef.current.offsetWidth;
+                    pagerRef.current.scrollTo({ left: pageWidth * index, behavior: 'smooth' });
+                  }
+                }}>
+                <span
+                  style={{
+                    ...styles.pageTabLabel,
+                    ...(selected ? styles.pageTabLabelActive : null),
+                  }}>
+                  {tab.label}
+                </span>
+              </button>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
@@ -1319,14 +1361,23 @@ const styles = {
     backgroundColor: '#D2C7C1',
     margin: '0 auto',
   },
+  floatingTabBar: {
+    position: 'absolute',
+    bottom: 0,
+    left: 12,
+    right: 12,
+    zIndex: 100,
+  },
   pageTabsWrap: {
-    flex: 1,
-    backgroundColor: '#ECE6E0',
-    borderRadius: 18,
-    padding: 4,
-    display: 'grid',
-    gridTemplateColumns: '1fr 1fr 1fr 1fr',
-    gap: 3,
+    backgroundColor: 'rgba(248,245,240,0.98)',
+    backdropFilter: 'blur(20px)',
+    WebkitBackdropFilter: 'blur(20px)',
+    padding: '12px 16px 24px 16px',
+    display: 'flex',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderTop: '1px solid rgba(255,255,255,0.86)',
   },
   sheetControlsRow: {
     display: 'flex',
@@ -1334,20 +1385,25 @@ const styles = {
     gap: 10,
   },
   pageTabButton: {
-    minHeight: 38,
-    borderRadius: 14,
+    flex: 1,
+    minHeight: 52,
+    borderRadius: 20,
     border: 'none',
     backgroundColor: 'transparent',
     cursor: 'pointer',
-    transition: 'background-color 160ms ease, box-shadow 160ms ease',
+    transition: 'all 160ms ease',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '0 12px',
   },
   pageTabButtonActive: {
     backgroundColor: '#FFFFFF',
-    boxShadow: '0 2px 6px rgba(30,26,23,0.1)',
+    boxShadow: '0 2px 10px rgba(30,26,23,0.08)',
   },
   pageTabLabel: {
-    fontSize: 13,
-    fontWeight: 700,
+    fontSize: 15,
+    fontWeight: 800,
     color: '#7A6D67',
     transition: 'color 160ms ease',
   },
@@ -1385,14 +1441,14 @@ const styles = {
     overflowY: 'auto',
   },
   sheetContent: {
-    padding: '0 18px 28px',
+    padding: '0 18px 84px',
     display: 'flex',
     flexDirection: 'column',
     gap: 16,
   },
   focusedSheetContent: {
     overflowY: 'auto',
-    padding: '0 18px 28px',
+    padding: '0 18px 84px',
     display: 'flex',
     flexDirection: 'column',
     gap: 16,
@@ -1445,6 +1501,19 @@ const styles = {
     display: 'flex',
     flexDirection: 'column',
     gap: 12,
+  },
+  menuButton: {
+    marginTop: 8,
+    backgroundColor: '#500000',
+    color: '#FFFFFF',
+    border: 'none',
+    borderRadius: 999,
+    padding: '12px 20px',
+    fontSize: 15,
+    fontWeight: '700',
+    cursor: 'pointer',
+    textAlign: 'center',
+    transition: 'background-color 160ms',
   },
   inviteCard: {
     backgroundColor: '#FFFFFF',
