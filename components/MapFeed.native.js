@@ -575,9 +575,9 @@ export default function MapFeed({
                 );
               })}
             </View>
-            <Pressable style={styles.minimizeButton} onPress={toggleSheet}>
+            {/* <Pressable style={styles.minimizeButton} onPress={toggleSheet}>
               <Text style={styles.minimizeButtonText}>{isSheetLow ? 'Maximize' : 'Minimize'}</Text>
-            </Pressable>
+            </Pressable> */}
           </View>
         </View>
 
