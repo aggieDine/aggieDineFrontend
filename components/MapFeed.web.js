@@ -739,9 +739,9 @@ export default function MapFeed({
           </div>
           <div style={styles.sheetControlsRow}>
             <div style={{ flex: 1 }} />
-            <button style={styles.minimizeButton} onClick={toggleSheet} aria-label={isSheetLow ? "Maximize sheet" : "Minimize sheet"}>
+            {/* <button style={styles.minimizeButton} onClick={toggleSheet} aria-label={isSheetLow ? "Maximize sheet" : "Minimize sheet"}>
               {isSheetLow ? "^" : "V"}
-            </button>
+            </button> */}
           </div>
         </div>
 
