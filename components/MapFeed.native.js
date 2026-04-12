@@ -49,8 +49,8 @@ function getDistanceKm(lat1, lon1, lat2, lon2) {
   const a =
     Math.sin(dLat / 2) ** 2 +
     Math.cos(lat1 * (Math.PI / 180)) *
-      Math.cos(lat2 * (Math.PI / 180)) *
-      Math.sin(dLon / 2) ** 2;
+    Math.cos(lat2 * (Math.PI / 180)) *
+    Math.sin(dLon / 2) ** 2;
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
@@ -266,20 +266,20 @@ export default function MapFeed({
       const aDistance =
         userLocation && a.coordinates
           ? getDistanceKm(
-              userLocation.latitude,
-              userLocation.longitude,
-              a.coordinates.latitude,
-              a.coordinates.longitude
-            )
+            userLocation.latitude,
+            userLocation.longitude,
+            a.coordinates.latitude,
+            a.coordinates.longitude
+          )
           : Infinity;
       const bDistance =
         userLocation && b.coordinates
           ? getDistanceKm(
-              userLocation.latitude,
-              userLocation.longitude,
-              b.coordinates.latitude,
-              b.coordinates.longitude
-            )
+            userLocation.latitude,
+            userLocation.longitude,
+            b.coordinates.latitude,
+            b.coordinates.longitude
+          )
           : Infinity;
 
       return aDistance - bDistance;
@@ -372,42 +372,42 @@ export default function MapFeed({
   const activeDistance =
     activeHall?.coordinates && userLocation
       ? formatDistanceMiles(
-          getDistanceKm(
-            userLocation.latitude,
-            userLocation.longitude,
-            activeHall.coordinates.latitude,
-            activeHall.coordinates.longitude
-          )
+        getDistanceKm(
+          userLocation.latitude,
+          userLocation.longitude,
+          activeHall.coordinates.latitude,
+          activeHall.coordinates.longitude
         )
+      )
       : null;
   const focusedDetailCopy =
     activePageIndex === MY_DAY_PAGE_INDEX
       ? getSheetCopy({
-          selectedHall,
-          suggestion,
-          nextClass,
-          recommendationMode: 'schedule',
-        })
+        selectedHall,
+        suggestion,
+        nextClass,
+        recommendationMode: 'schedule',
+      })
       : activePageIndex === SOCIAL_PAGE_INDEX
         ? {
-            eyebrow: selectedHallHasActiveInvite ? 'Active Invite Spot' : 'Social Spot',
-            title: selectedHall?.name ?? 'Dining Spot',
-            body: selectedHallHasActiveInvite
-              ? 'This dining spot is tied to active invite activity.'
-              : 'Viewing details for a dining spot you can use for group plans.',
-          }
+          eyebrow: selectedHallHasActiveInvite ? 'Active Invite Spot' : 'Social Spot',
+          title: selectedHall?.name ?? 'Dining Spot',
+          body: selectedHallHasActiveInvite
+            ? 'This dining spot is tied to active invite activity.'
+            : 'Viewing details for a dining spot you can use for group plans.',
+        }
         : activePageIndex === ME_PAGE_INDEX
           ? {
-              eyebrow: 'Selected Place',
-              title: selectedHall?.name ?? 'Dining Spot',
-              body: 'Viewing details for this dining spot from your personal map.',
-            }
+            eyebrow: 'Selected Place',
+            title: selectedHall?.name ?? 'Dining Spot',
+            body: 'Viewing details for this dining spot from your personal map.',
+          }
           : getSheetCopy({
-              selectedHall,
-              suggestion,
-              nextClass,
-              recommendationMode: 'location',
-            });
+            selectedHall,
+            suggestion,
+            nextClass,
+            recommendationMode: 'location',
+          });
 
   const recenterOnUser = () => {
     if (!userLocation || !mapRef.current) return;
@@ -550,233 +550,233 @@ export default function MapFeed({
             },
           ]}>
           <View style={styles.sheetGrabZone}>
-          <View style={styles.grabberWrap} {...panResponder.panHandlers}>
-            <View style={styles.grabber} />
-          </View>
-          <View style={styles.sheetControlsRow}>
-            <View style={styles.pageTabsWrap}>
-              {PAGE_TABS.map((tab, index) => {
-                const selected = activePageIndex === index;
-                return (
-                  <Pressable
-                    key={tab.key}
-                    style={[styles.pageTabButton, selected && styles.pageTabButtonActive]}
-                    onPress={() => {
-                      if (selectedHall) return;
-                      setActivePageIndex(index);
-                      if (pagerRef.current) {
-                        pagerRef.current.scrollTo({ x: pagerWidth * index, animated: true });
-                      }
-                    }}>
-                    <Text style={[styles.pageTabLabel, selected && styles.pageTabLabelActive]}>
-                      {tab.label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
+            <View style={styles.grabberWrap} {...panResponder.panHandlers}>
+              <View style={styles.grabber} />
             </View>
-            {/* <Pressable style={styles.minimizeButton} onPress={toggleSheet}>
+            <View style={styles.sheetControlsRow}>
+              <View style={styles.pageTabsWrap}>
+                {PAGE_TABS.map((tab, index) => {
+                  const selected = activePageIndex === index;
+                  return (
+                    <Pressable
+                      key={tab.key}
+                      style={[styles.pageTabButton, selected && styles.pageTabButtonActive]}
+                      onPress={() => {
+                        if (selectedHall) return;
+                        setActivePageIndex(index);
+                        if (pagerRef.current) {
+                          pagerRef.current.scrollTo({ x: pagerWidth * index, animated: true });
+                        }
+                      }}>
+                      <Text style={[styles.pageTabLabel, selected && styles.pageTabLabelActive]}>
+                        {tab.label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+              {/* <Pressable style={styles.minimizeButton} onPress={toggleSheet}>
               <Text style={styles.minimizeButtonText}>{isSheetLow ? 'Maximize' : 'Minimize'}</Text>
             </Pressable> */}
-          </View>
-        </View>
-
-        {selectedHall ? (
-          <ScrollView
-            contentContainerStyle={styles.focusedSheetContent}
-            showsVerticalScrollIndicator={false}
-            nestedScrollEnabled>
-            <View style={styles.heroBlock}>
-              <Text style={styles.eyebrow}>{focusedDetailCopy.eyebrow}</Text>
-              <Text style={styles.title}>{focusedDetailCopy.title}</Text>
-              <Text style={styles.body}>{focusedDetailCopy.body}</Text>
             </View>
+          </View>
 
-            <View style={styles.focusedPrimaryCard}>
-              <View style={styles.primaryHeader}>
-                <View style={styles.primaryTitleWrap}>
-                  <Text style={styles.primaryTitle}>{selectedHall.name}</Text>
-                  <Text style={styles.primaryMeta}>
-                    {selectedHall.category ?? 'Dining Spot'} | {getStatusLabel(selectedHall)}
-                  </Text>
+          {selectedHall ? (
+            <ScrollView
+              contentContainerStyle={styles.focusedSheetContent}
+              showsVerticalScrollIndicator={false}
+              nestedScrollEnabled>
+              <View style={styles.heroBlock}>
+                <Text style={styles.eyebrow}>{focusedDetailCopy.eyebrow}</Text>
+                <Text style={styles.title}>{focusedDetailCopy.title}</Text>
+                <Text style={styles.body}>{focusedDetailCopy.body}</Text>
+              </View>
+
+              <View style={styles.focusedPrimaryCard}>
+                <View style={styles.primaryHeader}>
+                  <View style={styles.primaryTitleWrap}>
+                    <Text style={styles.primaryTitle}>{selectedHall.name}</Text>
+                    <Text style={styles.primaryMeta}>
+                      {selectedHall.category ?? 'Dining Spot'} | {getStatusLabel(selectedHall)}
+                    </Text>
+                  </View>
+                  <Pressable style={styles.clearButton} onPress={() => setSelectedHall(null)}>
+                    <Ionicons name="close" size={16} color="#6B625D" />
+                  </Pressable>
                 </View>
-                <Pressable style={styles.clearButton} onPress={() => setSelectedHall(null)}>
-                  <Ionicons name="close" size={16} color="#6B625D" />
+
+                {activeDistance ? (
+                  <View style={styles.infoRow}>
+                    <Ionicons name="walk-outline" size={16} color="#7A6E69" />
+                    <Text style={styles.infoText}>{activeDistance}</Text>
+                  </View>
+                ) : null}
+
+                {activePageIndex === MY_DAY_PAGE_INDEX && nextClass ? (
+                  <View style={styles.infoRow}>
+                    <Ionicons name="school-outline" size={16} color="#7A6E69" />
+                    <Text style={styles.infoText}>Planning around {nextClass.building}</Text>
+                  </View>
+                ) : activePageIndex === SOCIAL_PAGE_INDEX ? (
+                  <View style={styles.infoRow}>
+                    <Ionicons name="people-outline" size={16} color="#7A6E69" />
+                    <Text style={styles.infoText}>
+                      {selectedHallHasActiveInvite
+                        ? 'This spot has active invite activity.'
+                        : 'Open for future group invites.'}
+                    </Text>
+                  </View>
+                ) : activePageIndex === ME_PAGE_INDEX ? (
+                  <View style={styles.infoRow}>
+                    <Ionicons name="person-outline" size={16} color="#7A6E69" />
+                    <Text style={styles.infoText}>Viewing this spot from your personal dining view.</Text>
+                  </View>
+                ) : (
+                  <View style={styles.infoRow}>
+                    <Ionicons name="locate-outline" size={16} color="#7A6E69" />
+                    <Text style={styles.infoText}>Anchored to your live location</Text>
+                  </View>
+                )}
+
+                <Pressable
+                  style={styles.menuButton}
+                  onPress={() => openDetail(selectedHall)}>
+                  <Text style={styles.menuButtonText}>View Menu</Text>
                 </Pressable>
               </View>
 
-              {activeDistance ? (
-                <View style={styles.infoRow}>
-                  <Ionicons name="walk-outline" size={16} color="#7A6E69" />
-                  <Text style={styles.infoText}>{activeDistance}</Text>
-                </View>
-              ) : null}
-
-              {activePageIndex === MY_DAY_PAGE_INDEX && nextClass ? (
-                <View style={styles.infoRow}>
-                  <Ionicons name="school-outline" size={16} color="#7A6E69" />
-                  <Text style={styles.infoText}>Planning around {nextClass.building}</Text>
-                </View>
-              ) : activePageIndex === SOCIAL_PAGE_INDEX ? (
-                <View style={styles.infoRow}>
-                  <Ionicons name="people-outline" size={16} color="#7A6E69" />
-                  <Text style={styles.infoText}>
-                    {selectedHallHasActiveInvite
-                      ? 'This spot has active invite activity.'
-                      : 'Open for future group invites.'}
-                  </Text>
-                </View>
-              ) : activePageIndex === ME_PAGE_INDEX ? (
-                <View style={styles.infoRow}>
-                  <Ionicons name="person-outline" size={16} color="#7A6E69" />
-                  <Text style={styles.infoText}>Viewing this spot from your personal dining view.</Text>
-                </View>
-              ) : (
-                <View style={styles.infoRow}>
-                  <Ionicons name="locate-outline" size={16} color="#7A6E69" />
-                  <Text style={styles.infoText}>Anchored to your live location</Text>
-                </View>
-              )}
-
-              <Pressable
-                style={styles.menuButton}
-                onPress={() => openDetail(selectedHall)}>
-                <Text style={styles.menuButtonText}>View Menu</Text>
-              </Pressable>
-            </View>
-
-            {selectedHallInvites.length > 0 ? (
-              <View style={styles.inviteCard}>
-                <View style={styles.inviteHeader}>
-                  <Text style={styles.inviteEyebrow}>Invite Activity</Text>
-                  <View style={styles.inviteCountBadge}>
-                    <Text style={styles.inviteCountBadgeText}>{selectedHallInvites.length} active</Text>
-                  </View>
-                </View>
-
-                <View style={styles.inviteList}>
-                  {selectedHallInvites.map((invite) => (
-                    <View key={invite.id} style={styles.inviteRow}>
-                      <View style={styles.inviteTopLine}>
-                        <Text style={styles.inviteName}>{invite.friendName || 'Open Invite'}</Text>
-                        <View style={styles.inviteStatusBadge}>
-                          <Text style={styles.inviteStatusText}>{formatInviteStatus(invite.status)}</Text>
-                        </View>
-                      </View>
-                      <Text style={styles.inviteMeta}>
-                        {invite.date || 'TBD'} | {invite.time || 'TBD'}
-                      </Text>
-                      {invite.message ? (
-                        <Text style={styles.inviteMessage}>{invite.message}</Text>
-                      ) : null}
-                      {invite.status === 'pending' ? (
-                        <View style={styles.inviteActions}>
-                          <Pressable
-                            style={styles.acceptInviteButton}
-                            onPress={() => updateInviteStatus(invite.id, 'accepted')}>
-                            <Text style={styles.acceptInviteButtonText}>Accept</Text>
-                          </Pressable>
-                          <Pressable
-                            style={styles.declineInviteButton}
-                            onPress={() => updateInviteStatus(invite.id, 'declined')}>
-                            <Text style={styles.declineInviteButtonText}>Decline</Text>
-                          </Pressable>
-                        </View>
-                      ) : null}
+              {selectedHallInvites.length > 0 ? (
+                <View style={styles.inviteCard}>
+                  <View style={styles.inviteHeader}>
+                    <Text style={styles.inviteEyebrow}>Invite Activity</Text>
+                    <View style={styles.inviteCountBadge}>
+                      <Text style={styles.inviteCountBadgeText}>{selectedHallInvites.length} active</Text>
                     </View>
-                  ))}
-                </View>
-              </View>
-            ) : null}
-          </ScrollView>
-        ) : (
-          <ScrollView
-            ref={pagerRef}
-            horizontal
-            pagingEnabled
-            showsHorizontalScrollIndicator={false}
-            onMomentumScrollEnd={(e) => {
-              const page = Math.round(e.nativeEvent.contentOffset.x / pagerWidth);
-              setActivePageIndex(page);
-            }}
-            style={styles.pagerScroll}>
-            {/* Page 0: Explore */}
-            <ScrollView
-              style={{ width: pagerWidth }}
-              contentContainerStyle={styles.sheetContent}
-              showsVerticalScrollIndicator={false}
-              nestedScrollEnabled>
-              <View style={styles.modeSection}>
-                <Text style={styles.modeSectionLabel}>Recommendation</Text>
-                <View style={styles.segmentedWrap}>
-                  {MODE_OPTIONS.map((option) => {
-                    const selected = recommendationMode === option.value;
-                    return (
-                      <Pressable
-                        key={option.value}
-                        style={[styles.segmentButton, selected && styles.segmentButtonActive]}
-                        onPress={() => onRecommendationModeChange?.(option.value)}>
-                        <Text style={[styles.segmentLabel, selected && styles.segmentLabelActive]}>
-                          {option.label}
+                  </View>
+
+                  <View style={styles.inviteList}>
+                    {selectedHallInvites.map((invite) => (
+                      <View key={invite.id} style={styles.inviteRow}>
+                        <View style={styles.inviteTopLine}>
+                          <Text style={styles.inviteName}>{invite.friendName || 'Open Invite'}</Text>
+                          <View style={styles.inviteStatusBadge}>
+                            <Text style={styles.inviteStatusText}>{formatInviteStatus(invite.status)}</Text>
+                          </View>
+                        </View>
+                        <Text style={styles.inviteMeta}>
+                          {invite.date || 'TBD'} | {invite.time || 'TBD'}
                         </Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-              </View>
-              <View style={styles.heroBlock}>
-                <Text style={styles.eyebrow}>{sheetCopy.eyebrow}</Text>
-                <Text style={styles.title}>{sheetCopy.title}</Text>
-                <Text style={styles.body}>{sheetCopy.body}</Text>
-              </View>
-
-              {activeHall ? (
-                <View style={styles.primaryCard}>
-                  <View style={styles.primaryHeader}>
-                    <View style={styles.primaryTitleWrap}>
-                      <Text style={styles.primaryTitle}>{activeHall.name}</Text>
-                      <Text style={styles.primaryMeta}>
-                        {activeHall.category ?? 'Dining Spot'} | {getStatusLabel(activeHall)}
-                      </Text>
-                    </View>
-                    <View style={styles.recommendedBadge}>
-                      <Text style={styles.recommendedBadgeText}>Recommended</Text>
-                    </View>
+                        {invite.message ? (
+                          <Text style={styles.inviteMessage}>{invite.message}</Text>
+                        ) : null}
+                        {invite.status === 'pending' ? (
+                          <View style={styles.inviteActions}>
+                            <Pressable
+                              style={styles.acceptInviteButton}
+                              onPress={() => updateInviteStatus(invite.id, 'accepted')}>
+                              <Text style={styles.acceptInviteButtonText}>Accept</Text>
+                            </Pressable>
+                            <Pressable
+                              style={styles.declineInviteButton}
+                              onPress={() => updateInviteStatus(invite.id, 'declined')}>
+                              <Text style={styles.declineInviteButtonText}>Decline</Text>
+                            </Pressable>
+                          </View>
+                        ) : null}
+                      </View>
+                    ))}
                   </View>
-
-                  {activeDistance ? (
-                    <View style={styles.infoRow}>
-                      <Ionicons name="walk-outline" size={16} color="#7A6E69" />
-                      <Text style={styles.infoText}>{activeDistance}</Text>
-                    </View>
-                  ) : null}
-
-                  {recommendationMode === 'schedule' && nextClass ? (
-                    <View style={styles.infoRow}>
-                      <Ionicons name="school-outline" size={16} color="#7A6E69" />
-                      <Text style={styles.infoText}>Planning around {nextClass.building}</Text>
-                    </View>
-                  ) : (
-                    <View style={styles.infoRow}>
-                      <Ionicons name="locate-outline" size={16} color="#7A6E69" />
-                      <Text style={styles.infoText}>Anchored to your live location</Text>
-                    </View>
-                  )}
                 </View>
               ) : null}
+            </ScrollView>
+          ) : (
+            <ScrollView
+              ref={pagerRef}
+              horizontal
+              pagingEnabled
+              showsHorizontalScrollIndicator={false}
+              onMomentumScrollEnd={(e) => {
+                const page = Math.round(e.nativeEvent.contentOffset.x / pagerWidth);
+                setActivePageIndex(page);
+              }}
+              style={styles.pagerScroll}>
+              {/* Page 0: Explore */}
+              <ScrollView
+                style={{ width: pagerWidth }}
+                contentContainerStyle={styles.sheetContent}
+                showsVerticalScrollIndicator={false}
+                nestedScrollEnabled>
+                <View style={styles.modeSection}>
+                  <Text style={styles.modeSectionLabel}>Recommendation</Text>
+                  <View style={styles.segmentedWrap}>
+                    {MODE_OPTIONS.map((option) => {
+                      const selected = recommendationMode === option.value;
+                      return (
+                        <Pressable
+                          key={option.value}
+                          style={[styles.segmentButton, selected && styles.segmentButtonActive]}
+                          onPress={() => onRecommendationModeChange?.(option.value)}>
+                          <Text style={[styles.segmentLabel, selected && styles.segmentLabelActive]}>
+                            {option.label}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </View>
+                <View style={styles.heroBlock}>
+                  <Text style={styles.eyebrow}>{sheetCopy.eyebrow}</Text>
+                  <Text style={styles.title}>{sheetCopy.title}</Text>
+                  <Text style={styles.body}>{sheetCopy.body}</Text>
+                </View>
 
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Dining Places</Text>
-                <Text style={styles.sectionCaption}>Tap a restaurant to focus it on the sheet.</Text>
-              </View>
+                {activeHall ? (
+                  <View style={styles.primaryCard}>
+                    <View style={styles.primaryHeader}>
+                      <View style={styles.primaryTitleWrap}>
+                        <Text style={styles.primaryTitle}>{activeHall.name}</Text>
+                        <Text style={styles.primaryMeta}>
+                          {activeHall.category ?? 'Dining Spot'} | {getStatusLabel(activeHall)}
+                        </Text>
+                      </View>
+                      <View style={styles.recommendedBadge}>
+                        <Text style={styles.recommendedBadgeText}>Recommended</Text>
+                      </View>
+                    </View>
 
-              <View style={styles.placeList}>
-                {places.map((hall) => {
-                  const selected = hall.id === selectedHall?.id;
-                  const recommended = hall.id === suggestion?.id;
-                  const distance =
-                    userLocation && hall.coordinates
-                      ? formatDistanceMiles(
+                    {activeDistance ? (
+                      <View style={styles.infoRow}>
+                        <Ionicons name="walk-outline" size={16} color="#7A6E69" />
+                        <Text style={styles.infoText}>{activeDistance}</Text>
+                      </View>
+                    ) : null}
+
+                    {recommendationMode === 'schedule' && nextClass ? (
+                      <View style={styles.infoRow}>
+                        <Ionicons name="school-outline" size={16} color="#7A6E69" />
+                        <Text style={styles.infoText}>Planning around {nextClass.building}</Text>
+                      </View>
+                    ) : (
+                      <View style={styles.infoRow}>
+                        <Ionicons name="locate-outline" size={16} color="#7A6E69" />
+                        <Text style={styles.infoText}>Anchored to your live location</Text>
+                      </View>
+                    )}
+                  </View>
+                ) : null}
+
+                <View style={styles.sectionHeader}>
+                  <Text style={styles.sectionTitle}>Dining Places</Text>
+                  <Text style={styles.sectionCaption}>Tap a restaurant to focus it on the sheet.</Text>
+                </View>
+
+                <View style={styles.placeList}>
+                  {places.map((hall) => {
+                    const selected = hall.id === selectedHall?.id;
+                    const recommended = hall.id === suggestion?.id;
+                    const distance =
+                      userLocation && hall.coordinates
+                        ? formatDistanceMiles(
                           getDistanceKm(
                             userLocation.latitude,
                             userLocation.longitude,
@@ -784,72 +784,72 @@ export default function MapFeed({
                             hall.coordinates.longitude
                           )
                         )
-                      : null;
+                        : null;
 
-                  return (
-                    <Pressable
-                      key={hall.id}
-                      style={[styles.placeRow, selected && styles.placeRowSelected]}
-                      onPress={() => openDetail(hall)}>
-                      <View style={styles.placeRowMain}>
-                        <View style={styles.placeIconWrap}>
-                          <Ionicons
-                            name={hall.status?.isOpen ? 'restaurant' : 'restaurant-outline'}
-                            size={18}
-                            color={recommended ? '#2F6FED' : hall.status?.isOpen ? '#1B8B4B' : '#B44A4A'}
-                          />
-                        </View>
-                        <View style={styles.placeCopy}>
-                          <View style={styles.placeTitleRow}>
-                            <Text style={styles.placeName}>{hall.name}</Text>
-                            {recommended ? (
-                              <View style={styles.inlineBadge}>
-                                <Text style={styles.inlineBadgeText}>For you</Text>
-                              </View>
-                            ) : null}
+                    return (
+                      <Pressable
+                        key={hall.id}
+                        style={[styles.placeRow, selected && styles.placeRowSelected]}
+                        onPress={() => openDetail(hall)}>
+                        <View style={styles.placeRowMain}>
+                          <View style={styles.placeIconWrap}>
+                            <Ionicons
+                              name={hall.status?.isOpen ? 'restaurant' : 'restaurant-outline'}
+                              size={18}
+                              color={recommended ? '#2F6FED' : hall.status?.isOpen ? '#1B8B4B' : '#B44A4A'}
+                            />
                           </View>
-                          <Text style={styles.placeMeta}>
-                            {hall.category ?? 'Dining Spot'} | {getStatusLabel(hall)}
-                            {distance ? ` | ${distance}` : ''}
-                          </Text>
+                          <View style={styles.placeCopy}>
+                            <View style={styles.placeTitleRow}>
+                              <Text style={styles.placeName}>{hall.name}</Text>
+                              {recommended ? (
+                                <View style={styles.inlineBadge}>
+                                  <Text style={styles.inlineBadgeText}>For you</Text>
+                                </View>
+                              ) : null}
+                            </View>
+                            <Text style={styles.placeMeta}>
+                              {hall.category ?? 'Dining Spot'} | {getStatusLabel(hall)}
+                              {distance ? ` | ${distance}` : ''}
+                            </Text>
+                          </View>
                         </View>
-                      </View>
-                      <Ionicons name="chevron-forward" size={16} color="#9A8F89" />
-                    </Pressable>
-                  );
-                })}
-              </View>
-            </ScrollView>
+                        <Ionicons name="chevron-forward" size={16} color="#9A8F89" />
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </ScrollView>
 
-            {/* Page 1: My Day */}
-            <ScrollView
-              style={{ width: pagerWidth }}
-              contentContainerStyle={styles.sheetContent}
-              showsVerticalScrollIndicator={false}
-              nestedScrollEnabled>
-              <ScheduleEditorPanel />
-            </ScrollView>
+              {/* Page 1: My Day */}
+              <ScrollView
+                style={{ width: pagerWidth }}
+                contentContainerStyle={styles.sheetContent}
+                showsVerticalScrollIndicator={false}
+                nestedScrollEnabled>
+                <ScheduleEditorPanel />
+              </ScrollView>
 
-            {/* Page 2: Social */}
-            <ScrollView
-              style={{ width: pagerWidth }}
-              contentContainerStyle={styles.sheetContent}
-              showsVerticalScrollIndicator={false}
-              nestedScrollEnabled>
-              <GroupsPanel />
-            </ScrollView>
+              {/* Page 2: Social */}
+              <ScrollView
+                style={{ width: pagerWidth }}
+                contentContainerStyle={styles.sheetContent}
+                showsVerticalScrollIndicator={false}
+                nestedScrollEnabled>
+                <GroupsPanel />
+              </ScrollView>
 
-            {/* Page 3: Me */}
-            <ScrollView
-              style={{ width: pagerWidth }}
-              contentContainerStyle={styles.sheetContent}
-              showsVerticalScrollIndicator={false}
-              nestedScrollEnabled>
-              <MePanel />
+              {/* Page 3: Me */}
+              <ScrollView
+                style={{ width: pagerWidth }}
+                contentContainerStyle={styles.sheetContent}
+                showsVerticalScrollIndicator={false}
+                nestedScrollEnabled>
+                <MePanel />
+              </ScrollView>
             </ScrollView>
-          </ScrollView>
-        )}
-      </Animated.View>
+          )}
+        </Animated.View>
       </View>
     </View>
   );

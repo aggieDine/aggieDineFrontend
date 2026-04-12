@@ -2,6 +2,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 
 import { useAuth } from '../auth/AuthContext';
+import { getMetadataForLocation } from './locationMetadata';
+import { buildHoursMap, fetchHoursData } from '../services/hoursApi';
 import { fetchMenuData } from '../services/menuApi';
 import { transformS3Data } from '../services/transformMenu';
 import { DINING_HALLS } from './dining';
@@ -33,11 +35,55 @@ export function DiningDataProvider({ children }) {
       // Cache read failed — continue to API fetch
     }
 
-    // 2. Fetch fresh data from the menu API
+    // 2. Fetch fresh data from the menu API and hours API
     try {
-      const apiData = await fetchMenuData({}, token);
+      const [apiData, hoursData] = await Promise.all([
+        fetchMenuData({}, token),
+        fetchHoursData({}, token).catch((err) => {
+          console.warn('Hours API fetch failed (non-blocking):', err);
+          return null;
+        }),
+      ]);
+
       if (apiData) {
-        const transformed = transformS3Data(apiData);
+        let transformed = transformS3Data(apiData);
+
+        // Merge hours open/closed status into each hall, and add
+        // halls that appear in the hours API but not in the menu data.
+        if (hoursData) {
+          const hoursMap = buildHoursMap(hoursData);
+          const existingNames = new Set(transformed.map((h) => h.name));
+
+          transformed = transformed.map((hall) => {
+            if (hoursMap.has(hall.name)) {
+              return {
+                ...hall,
+                status: { ...hall.status, isOpen: hoursMap.get(hall.name) },
+              };
+            }
+            return hall;
+          });
+
+          // Add locations that are open per hours API but missing from menu data
+          for (const [locationName, isOpen] of hoursMap) {
+            if (!existingNames.has(locationName)) {
+              const metadata = getMetadataForLocation(locationName);
+              if (metadata.coordinates) {
+                transformed.push({
+                  id: locationName.toLowerCase().replace(/[^a-z0-9]+/g, '_'),
+                  name: locationName,
+                  category: metadata.category,
+                  coordinates: metadata.coordinates,
+                  status: { isOpen },
+                  description: metadata.description,
+                  hours: metadata.hours || [],
+                  periods: [],
+                });
+              }
+            }
+          }
+        }
+
         setDiningHalls(transformed);
 
         const updatedAt = apiData.scraped_at || new Date().toISOString();

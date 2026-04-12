@@ -38,8 +38,8 @@ function getDistanceKm(lat1, lon1, lat2, lon2) {
   const a =
     Math.sin(dLat / 2) ** 2 +
     Math.cos(lat1 * (Math.PI / 180)) *
-      Math.cos(lat2 * (Math.PI / 180)) *
-      Math.sin(dLon / 2) ** 2;
+    Math.cos(lat2 * (Math.PI / 180)) *
+    Math.sin(dLon / 2) ** 2;
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
@@ -261,7 +261,7 @@ export default function MapFeed({
         if (used.has(j) || !other.coordinates?.latitude) return;
         const dist = Math.sqrt(
           Math.pow(hall.coordinates.latitude - other.coordinates.latitude, 2) +
-            Math.pow(hall.coordinates.longitude - other.coordinates.longitude, 2)
+          Math.pow(hall.coordinates.longitude - other.coordinates.longitude, 2)
         );
         if (dist < clusterRadius) {
           group.push(other);
@@ -280,7 +280,7 @@ export default function MapFeed({
       });
     });
 
-      return groups;
+    return groups;
   }, [markerDiningHalls]);
 
   const places = useMemo(() => {
@@ -296,20 +296,20 @@ export default function MapFeed({
       const aDistance =
         userLocation && a.coordinates
           ? getDistanceKm(
-              userLocation.latitude,
-              userLocation.longitude,
-              a.coordinates.latitude,
-              a.coordinates.longitude
-            )
+            userLocation.latitude,
+            userLocation.longitude,
+            a.coordinates.latitude,
+            a.coordinates.longitude
+          )
           : Infinity;
       const bDistance =
         userLocation && b.coordinates
           ? getDistanceKm(
-              userLocation.latitude,
-              userLocation.longitude,
-              b.coordinates.latitude,
-              b.coordinates.longitude
-            )
+            userLocation.latitude,
+            userLocation.longitude,
+            b.coordinates.latitude,
+            b.coordinates.longitude
+          )
           : Infinity;
 
       return aDistance - bDistance;
@@ -374,7 +374,7 @@ export default function MapFeed({
 
       setSelectedHall(null);
       setSelectedCluster(cluster);
-      
+
       if (mapRef.current) {
         mapRef.current.flyTo({
           center: [cluster.center.longitude, cluster.center.latitude],
@@ -510,20 +510,20 @@ export default function MapFeed({
       const aDistance =
         userLocation && a.coordinates
           ? getDistanceKm(
-              userLocation.latitude,
-              userLocation.longitude,
-              a.coordinates.latitude,
-              a.coordinates.longitude
-            )
+            userLocation.latitude,
+            userLocation.longitude,
+            a.coordinates.latitude,
+            a.coordinates.longitude
+          )
           : Infinity;
       const bDistance =
         userLocation && b.coordinates
           ? getDistanceKm(
-              userLocation.latitude,
-              userLocation.longitude,
-              b.coordinates.latitude,
-              b.coordinates.longitude
-            )
+            userLocation.latitude,
+            userLocation.longitude,
+            b.coordinates.latitude,
+            b.coordinates.longitude
+          )
           : Infinity;
 
       return aDistance - bDistance;
@@ -544,31 +544,31 @@ export default function MapFeed({
   const activeDistance =
     activeHall?.coordinates && userLocation
       ? formatDistanceMiles(
-          getDistanceKm(
-            userLocation.latitude,
-            userLocation.longitude,
-            activeHall.coordinates.latitude,
-            activeHall.coordinates.longitude
-          )
+        getDistanceKm(
+          userLocation.latitude,
+          userLocation.longitude,
+          activeHall.coordinates.latitude,
+          activeHall.coordinates.longitude
         )
+      )
       : null;
   const focusedDetailCopy =
     activePageIndex === MY_DAY_PAGE_INDEX
       ? getMyDayCopy({ selectedHall, suggestion, nextClass })
       : activePageIndex === SOCIAL_PAGE_INDEX
         ? {
-            eyebrow: selectedHallHasActiveInvite ? 'Active Invite Spot' : 'Social Spot',
-            title: selectedHall?.name ?? 'Dining Spot',
-            body: selectedHallHasActiveInvite
-              ? 'This dining spot is tied to active invite activity.'
-              : 'Viewing details for a dining spot you can use for group plans.',
-          }
+          eyebrow: selectedHallHasActiveInvite ? 'Active Invite Spot' : 'Social Spot',
+          title: selectedHall?.name ?? 'Dining Spot',
+          body: selectedHallHasActiveInvite
+            ? 'This dining spot is tied to active invite activity.'
+            : 'Viewing details for a dining spot you can use for group plans.',
+        }
         : activePageIndex === ME_PAGE_INDEX
           ? {
-              eyebrow: 'Selected Place',
-              title: selectedHall?.name ?? 'Dining Spot',
-              body: 'Viewing details for this dining spot from your personal map.',
-            }
+            eyebrow: 'Selected Place',
+            title: selectedHall?.name ?? 'Dining Spot',
+            body: 'Viewing details for this dining spot from your personal map.',
+          }
           : getExploreCopy({ selectedHall, suggestion });
 
   useEffect(() => {
@@ -675,14 +675,14 @@ export default function MapFeed({
                     transform: isSelected ? 'scale(1.12)' : 'scale(1)',
                     ...(isSelected
                       ? {
-                          backgroundColor: '#500000',
-                          boxShadow: '0 0 0 3px #FFFFFF, 0 0 0 6px rgba(80,0,0,0.6), 0 8px 20px rgba(80,0,0,0.5)',
-                        }
+                        backgroundColor: '#500000',
+                        boxShadow: '0 0 0 3px #FFFFFF, 0 0 0 6px rgba(80,0,0,0.6), 0 8px 20px rgba(80,0,0,0.5)',
+                      }
                       : isInviteHighlighted
                         ? {
-                            backgroundColor: SOCIAL_PIN_COLOR,
-                            boxShadow: '0 6px 14px rgba(217,138,43,0.3)',
-                          }
+                          backgroundColor: SOCIAL_PIN_COLOR,
+                          boxShadow: '0 6px 14px rgba(217,138,43,0.3)',
+                        }
                         : null),
                   }}>
                   <span style={styles.clusterCount}>{cluster.items.length}</span>
@@ -727,162 +727,162 @@ export default function MapFeed({
             display: 'flex',
             flexDirection: 'column',
           }}>
-        <div style={styles.sheetDragArea}>
-          <div
-            style={styles.grabberWrap}
-            onMouseDown={(event) => startDrag(event.clientY)}
-            onTouchStart={(event) => {
-              const touch = event.touches[0];
-              if (touch) startDrag(touch.clientY);
-            }}>
-            <div style={styles.grabber} />
-          </div>
-          <div style={styles.sheetControlsRow}>
-            <div style={{ flex: 1 }} />
-            {/* <button style={styles.minimizeButton} onClick={toggleSheet} aria-label={isSheetLow ? "Maximize sheet" : "Minimize sheet"}>
+          <div style={styles.sheetDragArea}>
+            <div
+              style={styles.grabberWrap}
+              onMouseDown={(event) => startDrag(event.clientY)}
+              onTouchStart={(event) => {
+                const touch = event.touches[0];
+                if (touch) startDrag(touch.clientY);
+              }}>
+              <div style={styles.grabber} />
+            </div>
+            <div style={styles.sheetControlsRow}>
+              <div style={{ flex: 1 }} />
+              {/* <button style={styles.minimizeButton} onClick={toggleSheet} aria-label={isSheetLow ? "Maximize sheet" : "Minimize sheet"}>
               {isSheetLow ? "^" : "V"}
             </button> */}
-          </div>
-        </div>
-
-        {selectedHall ? (
-          <div style={styles.focusedSheetContent}>
-            <div style={styles.heroBlock}>
-              <p style={styles.eyebrow}>{focusedDetailCopy.eyebrow}</p>
-              <h2 style={styles.title}>{focusedDetailCopy.title}</h2>
-              <p style={styles.body}>{focusedDetailCopy.body}</p>
             </div>
+          </div>
 
-            <div style={styles.focusedPrimaryCard}>
-              <div style={styles.primaryHeader}>
-                <div style={styles.primaryTitleWrap}>
-                  <h3 style={styles.primaryTitle}>{selectedHall.name}</h3>
-                  <p style={styles.primaryMeta}>
-                    {selectedHall.category ?? 'Dining Spot'} | {getStatusLabel(selectedHall)}
-                  </p>
+          {selectedHall ? (
+            <div style={styles.focusedSheetContent}>
+              <div style={styles.heroBlock}>
+                <p style={styles.eyebrow}>{focusedDetailCopy.eyebrow}</p>
+                <h2 style={styles.title}>{focusedDetailCopy.title}</h2>
+                <p style={styles.body}>{focusedDetailCopy.body}</p>
+              </div>
+
+              <div style={styles.focusedPrimaryCard}>
+                <div style={styles.primaryHeader}>
+                  <div style={styles.primaryTitleWrap}>
+                    <h3 style={styles.primaryTitle}>{selectedHall.name}</h3>
+                    <p style={styles.primaryMeta}>
+                      {selectedHall.category ?? 'Dining Spot'} | {getStatusLabel(selectedHall)}
+                    </p>
+                  </div>
+                  <button
+                    style={styles.clearButton}
+                    onClick={() => setSelectedHall(null)}
+                    aria-label="Close place details">
+                    x
+                  </button>
                 </div>
+
+                {activeDistance ? (
+                  <div style={styles.infoRow}>
+                    <span style={styles.infoIcon}>Walk</span>
+                    <span style={styles.infoText}>{activeDistance}</span>
+                  </div>
+                ) : null}
+
+                {activePageIndex === MY_DAY_PAGE_INDEX && nextClass ? (
+                  <div style={styles.infoRow}>
+                    <span style={styles.infoIcon}>Class</span>
+                    <span style={styles.infoText}>Planning around {nextClass.building}</span>
+                  </div>
+                ) : activePageIndex === SOCIAL_PAGE_INDEX ? (
+                  <div style={styles.infoRow}>
+                    <span style={styles.infoIcon}>Social</span>
+                    <span style={styles.infoText}>
+                      {selectedHallHasActiveInvite
+                        ? 'This spot has active invite activity.'
+                        : 'Open for future group invites.'}
+                    </span>
+                  </div>
+                ) : activePageIndex === ME_PAGE_INDEX ? (
+                  <div style={styles.infoRow}>
+                    <span style={styles.infoIcon}>Me</span>
+                    <span style={styles.infoText}>Viewing this spot from your personal dining view.</span>
+                  </div>
+                ) : (
+                  <div style={styles.infoRow}>
+                    <span style={styles.infoIcon}>Near</span>
+                    <span style={styles.infoText}>Anchored to your live location</span>
+                  </div>
+                )}
+
                 <button
-                  style={styles.clearButton}
-                  onClick={() => setSelectedHall(null)}
-                  aria-label="Close place details">
-                  x
+                  style={styles.menuButton}
+                  onClick={() => router.push(`/restaurant/${selectedHall.id}`)}>
+                  View Menu
                 </button>
               </div>
 
-              {activeDistance ? (
-                <div style={styles.infoRow}>
-                  <span style={styles.infoIcon}>Walk</span>
-                  <span style={styles.infoText}>{activeDistance}</span>
+              {selectedHallInvites.length > 0 ? (
+                <div style={styles.inviteCard}>
+                  <div style={styles.inviteHeader}>
+                    <p style={styles.inviteEyebrow}>Invite Activity</p>
+                    <span style={styles.inviteCountBadge}>
+                      {selectedHallInvites.length} active
+                    </span>
+                  </div>
+
+                  <div style={styles.inviteList}>
+                    {selectedHallInvites.map((invite) => (
+                      <div key={invite.id} style={styles.inviteRow}>
+                        <div style={styles.inviteCopy}>
+                          <div style={styles.inviteTopLine}>
+                            <span style={styles.inviteName}>{invite.friendName || 'Open Invite'}</span>
+                            <span style={styles.inviteStatus}>{formatInviteStatus(invite.status)}</span>
+                          </div>
+                          <span style={styles.inviteMeta}>
+                            {invite.date || 'TBD'} | {invite.time || 'TBD'}
+                          </span>
+                          {invite.message ? (
+                            <span style={styles.inviteMessage}>{invite.message}</span>
+                          ) : null}
+                          {invite.status === 'pending' ? (
+                            <div style={styles.inviteActions}>
+                              <button
+                                style={styles.acceptInviteButton}
+                                onClick={() => updateInviteStatus(invite.id, 'accepted')}>
+                                Accept
+                              </button>
+                              <button
+                                style={styles.declineInviteButton}
+                                onClick={() => updateInviteStatus(invite.id, 'declined')}>
+                                Decline
+                              </button>
+                            </div>
+                          ) : null}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               ) : null}
-
-              {activePageIndex === MY_DAY_PAGE_INDEX && nextClass ? (
-                <div style={styles.infoRow}>
-                  <span style={styles.infoIcon}>Class</span>
-                  <span style={styles.infoText}>Planning around {nextClass.building}</span>
-                </div>
-              ) : activePageIndex === SOCIAL_PAGE_INDEX ? (
-                <div style={styles.infoRow}>
-                  <span style={styles.infoIcon}>Social</span>
-                  <span style={styles.infoText}>
-                    {selectedHallHasActiveInvite
-                      ? 'This spot has active invite activity.'
-                      : 'Open for future group invites.'}
-                  </span>
-                </div>
-              ) : activePageIndex === ME_PAGE_INDEX ? (
-                <div style={styles.infoRow}>
-                  <span style={styles.infoIcon}>Me</span>
-                  <span style={styles.infoText}>Viewing this spot from your personal dining view.</span>
-                </div>
-              ) : (
-                <div style={styles.infoRow}>
-                  <span style={styles.infoIcon}>Near</span>
-                  <span style={styles.infoText}>Anchored to your live location</span>
-                </div>
-              )}
-
-              <button
-                style={styles.menuButton}
-                onClick={() => router.push(`/restaurant/${selectedHall.id}`)}>
-                View Menu
-              </button>
             </div>
-
-            {selectedHallInvites.length > 0 ? (
-              <div style={styles.inviteCard}>
-                <div style={styles.inviteHeader}>
-                  <p style={styles.inviteEyebrow}>Invite Activity</p>
-                  <span style={styles.inviteCountBadge}>
-                    {selectedHallInvites.length} active
-                  </span>
-                </div>
-
-                <div style={styles.inviteList}>
-                  {selectedHallInvites.map((invite) => (
-                    <div key={invite.id} style={styles.inviteRow}>
-                      <div style={styles.inviteCopy}>
-                        <div style={styles.inviteTopLine}>
-                          <span style={styles.inviteName}>{invite.friendName || 'Open Invite'}</span>
-                          <span style={styles.inviteStatus}>{formatInviteStatus(invite.status)}</span>
-                        </div>
-                        <span style={styles.inviteMeta}>
-                          {invite.date || 'TBD'} | {invite.time || 'TBD'}
-                        </span>
-                        {invite.message ? (
-                          <span style={styles.inviteMessage}>{invite.message}</span>
-                        ) : null}
-                        {invite.status === 'pending' ? (
-                          <div style={styles.inviteActions}>
-                            <button
-                              style={styles.acceptInviteButton}
-                              onClick={() => updateInviteStatus(invite.id, 'accepted')}>
-                              Accept
-                            </button>
-                            <button
-                              style={styles.declineInviteButton}
-                              onClick={() => updateInviteStatus(invite.id, 'declined')}>
-                              Decline
-                            </button>
-                          </div>
-                        ) : null}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ) : null}
-          </div>
-        ) : selectedCluster ? (
-          <div style={styles.focusedSheetContent}>
-            <div style={styles.heroBlock}>
-              <p style={styles.eyebrow}>Location Cluster</p>
-              <h2 style={styles.title}>{selectedClusterItems.length} Places Here</h2>
-              <p style={styles.body}>Pick a restaurant below to open the full dining detail view.</p>
-            </div>
-
-            <div style={styles.clusterListCard}>
-              <div style={styles.primaryHeader}>
-                <div style={styles.primaryTitleWrap}>
-                  <h3 style={styles.primaryTitle}>Nearby Dining Options</h3>
-                  <p style={styles.primaryMeta}>
-                    Multiple restaurants share this map point at the current zoom.
-                  </p>
-                </div>
-                <button
-                  style={styles.clearButton}
-                  onClick={() => setSelectedCluster(null)}
-                  aria-label="Close clustered place list">
-                  x
-                </button>
+          ) : selectedCluster ? (
+            <div style={styles.focusedSheetContent}>
+              <div style={styles.heroBlock}>
+                <p style={styles.eyebrow}>Location Cluster</p>
+                <h2 style={styles.title}>{selectedClusterItems.length} Places Here</h2>
+                <p style={styles.body}>Pick a restaurant below to open the full dining detail view.</p>
               </div>
 
-              <div style={styles.placeList}>
-                {selectedClusterItems.map((hall) => {
-                  const recommended = hall.id === suggestion?.id;
-                  const distance =
-                    userLocation && hall.coordinates
-                      ? formatDistanceMiles(
+              <div style={styles.clusterListCard}>
+                <div style={styles.primaryHeader}>
+                  <div style={styles.primaryTitleWrap}>
+                    <h3 style={styles.primaryTitle}>Nearby Dining Options</h3>
+                    <p style={styles.primaryMeta}>
+                      Multiple restaurants share this map point at the current zoom.
+                    </p>
+                  </div>
+                  <button
+                    style={styles.clearButton}
+                    onClick={() => setSelectedCluster(null)}
+                    aria-label="Close clustered place list">
+                    x
+                  </button>
+                </div>
+
+                <div style={styles.placeList}>
+                  {selectedClusterItems.map((hall) => {
+                    const recommended = hall.id === suggestion?.id;
+                    const distance =
+                      userLocation && hall.coordinates
+                        ? formatDistanceMiles(
                           getDistanceKm(
                             userLocation.latitude,
                             userLocation.longitude,
@@ -890,135 +890,15 @@ export default function MapFeed({
                             hall.coordinates.longitude
                           )
                         )
-                      : null;
-
-                  return (
-                    <button
-                      key={hall.id}
-                      style={styles.placeRow}
-                      onClick={() => {
-                        setSelectedCluster(null);
-                        setSelectedHall(hall);
-                        focusMapOnHall(hall);
-                      }}>
-                      <div style={styles.placeRowMain}>
-                        <div style={styles.placeIconWrap}>
-                          <span
-                            style={{
-                              ...styles.placeIcon,
-                              color:
-                                hall.inviteCount > 0 && activePageIndex === SOCIAL_PAGE_INDEX
-                                  ? SOCIAL_PIN_COLOR
-                                  : recommended
-                                    ? '#2F6FED'
-                                    : hall.status?.isOpen
-                                      ? '#1B8B4B'
-                                      : '#B44A4A',
-                            }}>
-                            Eat
-                          </span>
-                        </div>
-                        <div style={styles.placeCopy}>
-                          <div style={styles.placeTitleRow}>
-                            <span style={styles.placeName}>{hall.name}</span>
-                            {recommended ? <span style={styles.inlineBadge}>For you</span> : null}
-                            {hall.inviteCount > 0 ? (
-                              <span style={styles.clusterInlineBadge}>
-                                {hall.inviteCount} invite{hall.inviteCount === 1 ? '' : 's'}
-                              </span>
-                            ) : null}
-                          </div>
-                          <span style={styles.placeMeta}>
-                            {hall.category ?? 'Dining Spot'} | {getStatusLabel(hall)}
-                            {distance ? ` | ${distance}` : ''}
-                          </span>
-                        </div>
-                      </div>
-                      <span style={styles.placeChevron}>{'>'}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div
-            ref={pagerRef}
-            style={styles.pagerScroll}
-            onScroll={(e) => {
-              const el = e.currentTarget;
-              const page = Math.round(el.scrollLeft / el.offsetWidth);
-              if (page !== activePageIndex) {
-                setActivePageIndex(page);
-                if (page === EXPLORE_PAGE_INDEX) onRecommendationModeChange?.('location');
-                else if (page === MY_DAY_PAGE_INDEX) onRecommendationModeChange?.('schedule');
-              }
-            }}>
-            {/* Page 0: Explore (Near Me) */}
-            <div style={styles.pagerPage}>
-              <div style={styles.sheetContent}>
-                <div style={styles.heroBlock}>
-                  <p style={styles.eyebrow}>{exploreCopy.eyebrow}</p>
-                  <h2 style={styles.title}>{exploreCopy.title}</h2>
-                  <p style={styles.body}>{exploreCopy.body}</p>
-                </div>
-
-                {activeHall ? (
-                  <div style={styles.primaryCard}>
-                    <div style={styles.primaryHeader}>
-                      <div style={styles.primaryTitleWrap}>
-                        <h3 style={styles.primaryTitle}>{activeHall.name}</h3>
-                        <p style={styles.primaryMeta}>
-                          {activeHall.category ?? 'Dining Spot'} | {getStatusLabel(activeHall)}
-                        </p>
-                      </div>
-                      <span style={styles.recommendedBadge}>Recommended</span>
-                    </div>
-
-                    {activeDistance ? (
-                      <div style={styles.infoRow}>
-                        <span style={styles.infoIcon}>Walk</span>
-                        <span style={styles.infoText}>{activeDistance}</span>
-                      </div>
-                    ) : null}
-
-                    <div style={styles.infoRow}>
-                      <span style={styles.infoIcon}>Near</span>
-                      <span style={styles.infoText}>Anchored to your live location</span>
-                    </div>
-                  </div>
-                ) : null}
-
-                <div style={styles.sectionHeader}>
-                  <h3 style={styles.sectionTitle}>Dining Places</h3>
-                  <p style={styles.sectionCaption}>Nearest spots based on your current location.</p>
-                </div>
-
-                <div style={styles.placeList}>
-                  {places.map((hall) => {
-                    const selected = hall.id === selectedHall?.id;
-                    const recommended = hall.id === suggestion?.id;
-                    const distance =
-                      userLocation && hall.coordinates
-                        ? formatDistanceMiles(
-                            getDistanceKm(
-                              userLocation.latitude,
-                              userLocation.longitude,
-                              hall.coordinates.latitude,
-                              hall.coordinates.longitude
-                            )
-                          )
                         : null;
 
                     return (
                       <button
                         key={hall.id}
-                        style={{
-                          ...styles.placeRow,
-                          ...(selected ? styles.placeRowSelected : null),
-                        }}
+                        style={styles.placeRow}
                         onClick={() => {
-                          router.push(`/restaurant/${hall.id}`);
+                          setSelectedCluster(null);
+                          setSelectedHall(hall);
                           focusMapOnHall(hall);
                         }}>
                         <div style={styles.placeRowMain}>
@@ -1026,7 +906,14 @@ export default function MapFeed({
                             <span
                               style={{
                                 ...styles.placeIcon,
-                                color: recommended ? '#2F6FED' : hall.status?.isOpen ? '#1B8B4B' : '#B44A4A',
+                                color:
+                                  hall.inviteCount > 0 && activePageIndex === SOCIAL_PAGE_INDEX
+                                    ? SOCIAL_PIN_COLOR
+                                    : recommended
+                                      ? '#2F6FED'
+                                      : hall.status?.isOpen
+                                        ? '#1B8B4B'
+                                        : '#B44A4A',
                               }}>
                               Eat
                             </span>
@@ -1035,6 +922,11 @@ export default function MapFeed({
                             <div style={styles.placeTitleRow}>
                               <span style={styles.placeName}>{hall.name}</span>
                               {recommended ? <span style={styles.inlineBadge}>For you</span> : null}
+                              {hall.inviteCount > 0 ? (
+                                <span style={styles.clusterInlineBadge}>
+                                  {hall.inviteCount} invite{hall.inviteCount === 1 ? '' : 's'}
+                                </span>
+                              ) : null}
                             </div>
                             <span style={styles.placeMeta}>
                               {hall.category ?? 'Dining Spot'} | {getStatusLabel(hall)}
@@ -1049,63 +941,66 @@ export default function MapFeed({
                 </div>
               </div>
             </div>
-
-            {/* Page 1: My Day (Before Class) */}
-            <div style={styles.pagerPage}>
-              <div style={styles.sheetContent}>
-                <div style={styles.heroBlock}>
-                  <p style={styles.eyebrow}>{myDayCopy.eyebrow}</p>
-                  <h2 style={styles.title}>{myDayCopy.title}</h2>
-                  <p style={styles.body}>{myDayCopy.body}</p>
-                </div>
-
-                {activeHall && nextClass ? (
-                  <div style={styles.primaryCard}>
-                    <div style={styles.primaryHeader}>
-                      <div style={styles.primaryTitleWrap}>
-                        <h3 style={styles.primaryTitle}>{activeHall.name}</h3>
-                        <p style={styles.primaryMeta}>
-                          {activeHall.category ?? 'Dining Spot'} | {getStatusLabel(activeHall)}
-                        </p>
-                      </div>
-                      <span style={styles.recommendedBadge}>Recommended</span>
-                    </div>
-
-                    {activeDistance ? (
-                      <div style={styles.infoRow}>
-                        <span style={styles.infoIcon}>Walk</span>
-                        <span style={styles.infoText}>{activeDistance}</span>
-                      </div>
-                    ) : null}
-
-                    <div style={styles.infoRow}>
-                      <span style={styles.infoIcon}>Class</span>
-                      <span style={styles.infoText}>Planning around {nextClass.building}</span>
-                    </div>
+          ) : (
+            <div
+              ref={pagerRef}
+              style={styles.pagerScroll}
+              onScroll={(e) => {
+                const el = e.currentTarget;
+                const page = Math.round(el.scrollLeft / el.offsetWidth);
+                if (page !== activePageIndex) {
+                  setActivePageIndex(page);
+                  if (page === EXPLORE_PAGE_INDEX) onRecommendationModeChange?.('location');
+                  else if (page === MY_DAY_PAGE_INDEX) onRecommendationModeChange?.('schedule');
+                }
+              }}>
+              {/* Page 0: Explore (Near Me) */}
+              <div style={styles.pagerPage}>
+                <div style={styles.sheetContent}>
+                  <div style={styles.heroBlock}>
+                    <p style={styles.eyebrow}>{exploreCopy.eyebrow}</p>
+                    <h2 style={styles.title}>{exploreCopy.title}</h2>
+                    <p style={styles.body}>{exploreCopy.body}</p>
                   </div>
-                ) : null}
 
-                <div
-                  style={{...styles.sectionHeader, cursor: 'pointer', display: 'flex', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center'}}
-                  onClick={() => setIsMyDayPlacesExpanded(!isMyDayPlacesExpanded)}
-                >
-                  <div>
+                  {activeHall ? (
+                    <div style={styles.primaryCard}>
+                      <div style={styles.primaryHeader}>
+                        <div style={styles.primaryTitleWrap}>
+                          <h3 style={styles.primaryTitle}>{activeHall.name}</h3>
+                          <p style={styles.primaryMeta}>
+                            {activeHall.category ?? 'Dining Spot'} | {getStatusLabel(activeHall)}
+                          </p>
+                        </div>
+                        <span style={styles.recommendedBadge}>Recommended</span>
+                      </div>
+
+                      {activeDistance ? (
+                        <div style={styles.infoRow}>
+                          <span style={styles.infoIcon}>Walk</span>
+                          <span style={styles.infoText}>{activeDistance}</span>
+                        </div>
+                      ) : null}
+
+                      <div style={styles.infoRow}>
+                        <span style={styles.infoIcon}>Near</span>
+                        <span style={styles.infoText}>Anchored to your live location</span>
+                      </div>
+                    </div>
+                  ) : null}
+
+                  <div style={styles.sectionHeader}>
                     <h3 style={styles.sectionTitle}>Dining Places</h3>
-                    <p style={styles.sectionCaption}>Closest options before your next class.</p>
+                    <p style={styles.sectionCaption}>Nearest spots based on your current location.</p>
                   </div>
-                  <span style={{ color: '#9A8F89', fontWeight: 'bold', fontSize: 16 }}>
-                    {isMyDayPlacesExpanded ? '^' : 'V'}
-                  </span>
-                </div>
 
-                {isMyDayPlacesExpanded && (
                   <div style={styles.placeList}>
-                  {places.map((hall) => {
-                    const selected = hall.id === selectedHall?.id;
-                    const recommended = hall.id === suggestion?.id;
-                    const distance =
-                      userLocation && hall.coordinates
-                        ? formatDistanceMiles(
+                    {places.map((hall) => {
+                      const selected = hall.id === selectedHall?.id;
+                      const recommended = hall.id === suggestion?.id;
+                      const distance =
+                        userLocation && hall.coordinates
+                          ? formatDistanceMiles(
                             getDistanceKm(
                               userLocation.latitude,
                               userLocation.longitude,
@@ -1113,67 +1008,172 @@ export default function MapFeed({
                               hall.coordinates.longitude
                             )
                           )
-                        : null;
+                          : null;
 
-                    return (
-                      <button
-                        key={hall.id}
-                        style={{
-                          ...styles.placeRow,
-                          ...(selected ? styles.placeRowSelected : null),
-                        }}
-                        onClick={() => {
-                          router.push(`/restaurant/${hall.id}`);
-                          focusMapOnHall(hall);
-                        }}>
-                        <div style={styles.placeRowMain}>
-                          <div style={styles.placeIconWrap}>
-                            <span
-                              style={{
-                                ...styles.placeIcon,
-                                color: recommended ? '#2F6FED' : hall.status?.isOpen ? '#1B8B4B' : '#B44A4A',
-                              }}>
-                              Eat
-                            </span>
-                          </div>
-                          <div style={styles.placeCopy}>
-                            <div style={styles.placeTitleRow}>
-                              <span style={styles.placeName}>{hall.name}</span>
-                              {recommended ? <span style={styles.inlineBadge}>For you</span> : null}
+                      return (
+                        <button
+                          key={hall.id}
+                          style={{
+                            ...styles.placeRow,
+                            ...(selected ? styles.placeRowSelected : null),
+                          }}
+                          onClick={() => {
+                            router.push(`/restaurant/${hall.id}`);
+                            focusMapOnHall(hall);
+                          }}>
+                          <div style={styles.placeRowMain}>
+                            <div style={styles.placeIconWrap}>
+                              <span
+                                style={{
+                                  ...styles.placeIcon,
+                                  color: recommended ? '#2F6FED' : hall.status?.isOpen ? '#1B8B4B' : '#B44A4A',
+                                }}>
+                                Eat
+                              </span>
                             </div>
-                            <span style={styles.placeMeta}>
-                              {hall.category ?? 'Dining Spot'} | {getStatusLabel(hall)}
-                              {distance ? ` | ${distance}` : ''}
-                            </span>
+                            <div style={styles.placeCopy}>
+                              <div style={styles.placeTitleRow}>
+                                <span style={styles.placeName}>{hall.name}</span>
+                                {recommended ? <span style={styles.inlineBadge}>For you</span> : null}
+                              </div>
+                              <span style={styles.placeMeta}>
+                                {hall.category ?? 'Dining Spot'} | {getStatusLabel(hall)}
+                                {distance ? ` | ${distance}` : ''}
+                              </span>
+                            </div>
                           </div>
-                        </div>
-                        <span style={styles.placeChevron}>{'>'}</span>
-                      </button>
-                    );
-                  })}
+                          <span style={styles.placeChevron}>{'>'}</span>
+                        </button>
+                      );
+                    })}
                   </div>
-                )}
+                </div>
+              </div>
 
-                <div style={styles.sectionDivider} />
-                <ScheduleEditorPanel />
+              {/* Page 1: My Day (Before Class) */}
+              <div style={styles.pagerPage}>
+                <div style={styles.sheetContent}>
+                  <div style={styles.heroBlock}>
+                    <p style={styles.eyebrow}>{myDayCopy.eyebrow}</p>
+                    <h2 style={styles.title}>{myDayCopy.title}</h2>
+                    <p style={styles.body}>{myDayCopy.body}</p>
+                  </div>
+
+                  {activeHall && nextClass ? (
+                    <div style={styles.primaryCard}>
+                      <div style={styles.primaryHeader}>
+                        <div style={styles.primaryTitleWrap}>
+                          <h3 style={styles.primaryTitle}>{activeHall.name}</h3>
+                          <p style={styles.primaryMeta}>
+                            {activeHall.category ?? 'Dining Spot'} | {getStatusLabel(activeHall)}
+                          </p>
+                        </div>
+                        <span style={styles.recommendedBadge}>Recommended</span>
+                      </div>
+
+                      {activeDistance ? (
+                        <div style={styles.infoRow}>
+                          <span style={styles.infoIcon}>Walk</span>
+                          <span style={styles.infoText}>{activeDistance}</span>
+                        </div>
+                      ) : null}
+
+                      <div style={styles.infoRow}>
+                        <span style={styles.infoIcon}>Class</span>
+                        <span style={styles.infoText}>Planning around {nextClass.building}</span>
+                      </div>
+                    </div>
+                  ) : null}
+
+                  <div
+                    style={{ ...styles.sectionHeader, cursor: 'pointer', display: 'flex', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}
+                    onClick={() => setIsMyDayPlacesExpanded(!isMyDayPlacesExpanded)}
+                  >
+                    <div>
+                      <h3 style={styles.sectionTitle}>Dining Places</h3>
+                      <p style={styles.sectionCaption}>Closest options before your next class.</p>
+                    </div>
+                    <span style={{ color: '#9A8F89', fontWeight: 'bold', fontSize: 16 }}>
+                      {isMyDayPlacesExpanded ? '^' : 'V'}
+                    </span>
+                  </div>
+
+                  {isMyDayPlacesExpanded && (
+                    <div style={styles.placeList}>
+                      {places.map((hall) => {
+                        const selected = hall.id === selectedHall?.id;
+                        const recommended = hall.id === suggestion?.id;
+                        const distance =
+                          userLocation && hall.coordinates
+                            ? formatDistanceMiles(
+                              getDistanceKm(
+                                userLocation.latitude,
+                                userLocation.longitude,
+                                hall.coordinates.latitude,
+                                hall.coordinates.longitude
+                              )
+                            )
+                            : null;
+
+                        return (
+                          <button
+                            key={hall.id}
+                            style={{
+                              ...styles.placeRow,
+                              ...(selected ? styles.placeRowSelected : null),
+                            }}
+                            onClick={() => {
+                              router.push(`/restaurant/${hall.id}`);
+                              focusMapOnHall(hall);
+                            }}>
+                            <div style={styles.placeRowMain}>
+                              <div style={styles.placeIconWrap}>
+                                <span
+                                  style={{
+                                    ...styles.placeIcon,
+                                    color: recommended ? '#2F6FED' : hall.status?.isOpen ? '#1B8B4B' : '#B44A4A',
+                                  }}>
+                                  Eat
+                                </span>
+                              </div>
+                              <div style={styles.placeCopy}>
+                                <div style={styles.placeTitleRow}>
+                                  <span style={styles.placeName}>{hall.name}</span>
+                                  {recommended ? <span style={styles.inlineBadge}>For you</span> : null}
+                                </div>
+                                <span style={styles.placeMeta}>
+                                  {hall.category ?? 'Dining Spot'} | {getStatusLabel(hall)}
+                                  {distance ? ` | ${distance}` : ''}
+                                </span>
+                              </div>
+                            </div>
+                            <span style={styles.placeChevron}>{'>'}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  <div style={styles.sectionDivider} />
+                  <ScheduleEditorPanel />
+                </div>
+              </div>
+
+              {/* Page 2: Social */}
+              <div style={styles.pagerPage}>
+                <div style={styles.sheetContent}>
+                  <GroupsPanel />
+                </div>
+              </div>
+
+              {/* Page 3: Me */}
+              <div style={styles.pagerPage}>
+                <div style={styles.sheetContent}>
+                  <MePanel />
+                </div>
               </div>
             </div>
-
-            {/* Page 2: Social */}
-            <div style={styles.pagerPage}>
-              <div style={styles.sheetContent}>
-                <GroupsPanel />
-              </div>
-            </div>
-
-            {/* Page 3: Me */}
-            <div style={styles.pagerPage}>
-              <div style={styles.sheetContent}>
-                <MePanel />
-              </div>
-            </div>
-          </div>
-        )}
+          )}
         </div>
       </div>
 
