@@ -258,10 +258,41 @@ export default function MapFeed({
   const groupedMarkers = useMemo(() => {
     if (!markerDiningHalls.length) return [];
 
+    // --- Polo Road Garage bounding box ---
+    const POLO_BOUNDS = {
+      minLat: 30.6200, maxLat: 30.6245,
+      minLng: -96.3395, maxLng: -96.3365,
+    };
+    const isInPolo = (coords) =>
+      coords.latitude >= POLO_BOUNDS.minLat && coords.latitude <= POLO_BOUNDS.maxLat &&
+      coords.longitude >= POLO_BOUNDS.minLng && coords.longitude <= POLO_BOUNDS.maxLng;
+
     const clusterRadius = 0.0008;
     const groups = [];
     const used = new Set();
 
+    // First pass: collect all Polo-area halls into one cluster
+    const poloGroup = [];
+    markerDiningHalls.forEach((hall, i) => {
+      if (!hall.coordinates?.latitude) return;
+      if (isInPolo(hall.coordinates)) {
+        poloGroup.push(hall);
+        used.add(i);
+      }
+    });
+    if (poloGroup.length > 0) {
+      groups.push({
+        id: 'cluster-polo',
+        items: poloGroup,
+        totalInvites: poloGroup.reduce((sum, item) => sum + (item.inviteCount || 0), 0),
+        center: {
+          latitude: poloGroup.reduce((sum, item) => sum + item.coordinates.latitude, 0) / poloGroup.length,
+          longitude: poloGroup.reduce((sum, item) => sum + item.coordinates.longitude, 0) / poloGroup.length,
+        },
+      });
+    }
+
+    // Second pass: cluster remaining halls normally
     markerDiningHalls.forEach((hall, i) => {
       if (used.has(i) || !hall.coordinates?.latitude) return;
 
