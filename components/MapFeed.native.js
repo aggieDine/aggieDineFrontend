@@ -63,7 +63,18 @@ function formatDistanceMiles(distanceKm) {
 }
 
 function getStatusLabel(hall) {
-  return hall?.status?.isOpen ? 'Open Now' : 'Closed';
+  if (hall?.status?.isOpen) {
+    if (hall?.status?.closesIn != null) {
+      const hours = Math.floor(hall.status.closesIn / 60);
+      const mins = hall.status.closesIn % 60;
+      if (hours > 0) {
+        return `Open (Closes in ${hours}h ${mins}m)`;
+      }
+      return `Open (Closes in ${mins}m)`;
+    }
+    return 'Open Now';
+  }
+  return 'Closed';
 }
 
 function formatInviteStatus(status) {

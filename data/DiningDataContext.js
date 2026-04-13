@@ -56,17 +56,18 @@ export function DiningDataProvider({ children }) {
 
           transformed = transformed.map((hall) => {
             if (hoursMap.has(hall.name)) {
+              const statusData = hoursMap.get(hall.name);
               return {
                 ...hall,
-                status: { ...hall.status, isOpen: hoursMap.get(hall.name) },
+                status: { ...hall.status, isOpen: statusData.isOpen, closesIn: statusData.closesIn },
               };
             }
             return hall;
           });
 
           // Add locations that are open per hours API but missing from menu data
-          for (const [locationName, isOpen] of hoursMap) {
-            if (!existingNames.has(locationName)) {
+          for (const [locationName, statusData] of hoursMap) {
+            if (!existingNames.has(locationName) && statusData.isOpen) {
               const metadata = getMetadataForLocation(locationName);
               if (metadata.coordinates) {
                 transformed.push({
@@ -74,7 +75,7 @@ export function DiningDataProvider({ children }) {
                   name: locationName,
                   category: metadata.category,
                   coordinates: metadata.coordinates,
-                  status: { isOpen },
+                  status: { isOpen: statusData.isOpen, closesIn: statusData.closesIn },
                   description: metadata.description,
                   hours: metadata.hours || [],
                   periods: [],

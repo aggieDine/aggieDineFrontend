@@ -1,5 +1,7 @@
 const API_BASE = 'https://nh19d71sp8.execute-api.us-east-2.amazonaws.com/hours';
 
+
+
 /**
  * Fetch hours / open-closed data from the backend API.
  *
@@ -14,7 +16,15 @@ const API_BASE = 'https://nh19d71sp8.execute-api.us-east-2.amazonaws.com/hours';
 export async function fetchHoursData(params = {}, idToken) {
   const url = new URL(API_BASE);
 
-  if (params.date) url.searchParams.set('date', params.date);
+  let dateToFetch = params.date;
+  if (!dateToFetch) {
+    const today = new Date();
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, '0');
+    const dd = String(today.getDate()).padStart(2, '0');
+    dateToFetch = `${yyyy}-${mm}-${dd}`;
+  }
+  url.searchParams.set('date', dateToFetch);
 
   const headers = {};
   if (idToken) {
@@ -51,25 +61,44 @@ function parseTime(timeStr) {
  * @param {Date}     [now]    - Override for testability; defaults to new Date()
  * @returns {boolean}
  */
-function isOpenNow(hoursArr, now = new Date()) {
-  if (!hoursArr?.length) return false;
+function getOpenStatus(hoursArr, now = new Date()) {
+  if (!hoursArr?.length) return { isOpen: false, closesIn: null };
 
   const currentMinutes = now.getHours() * 60 + now.getMinutes();
 
-  return hoursArr.some((range) => {
+  for (const range of hoursArr) {
     const parts = range.split('-').map((s) => s.trim());
-    if (parts.length !== 2) return false;
+    if (parts.length !== 2) continue;
 
     const open = parseTime(parts[0]);
     const close = parseTime(parts[1]);
-    if (open == null || close == null) return false;
+    if (open == null || close == null) continue;
 
-    // Handle ranges that cross midnight (e.g. "9:00a - 12:00a")
-    if (close <= open) {
-      return currentMinutes >= open || currentMinutes < close;
+    let isOpen = false;
+    let closesIn = null;
+
+    if (close <= open) { // crosses midnight
+      if (currentMinutes >= open || currentMinutes < close) {
+        isOpen = true;
+        if (currentMinutes >= open) {
+          closesIn = (1440 - currentMinutes) + close;
+        } else {
+          closesIn = close - currentMinutes;
+        }
+      }
+    } else {
+      if (currentMinutes >= open && currentMinutes < close) {
+        isOpen = true;
+        closesIn = close - currentMinutes;
+      }
     }
-    return currentMinutes >= open && currentMinutes < close;
-  });
+
+    if (isOpen) {
+      return { isOpen: true, closesIn };
+    }
+  }
+
+  return { isOpen: false, closesIn: null };
 }
 
 /**
@@ -88,9 +117,9 @@ export function buildHoursMap(hoursJson) {
 
   for (const loc of hoursJson.locations) {
     if (loc.hours?.length) {
-      map.set(loc.location, isOpenNow(loc.hours));
+      map.set(loc.location, getOpenStatus(loc.hours));
     } else {
-      map.set(loc.location, !loc.closed);
+      map.set(loc.location, { isOpen: !loc.closed, closesIn: null });
     }
   }
 
