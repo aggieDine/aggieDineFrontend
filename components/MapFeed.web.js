@@ -11,6 +11,35 @@ import ScheduleEditorPanel from './panels/ScheduleEditorPanel';
 
 const MAP_STYLE = 'https://tiles.openfreemap.org/styles/liberty';
 
+const TAB_ICONS = {
+  explore: (color) => (
+    <svg width="26" height="26" viewBox="0 0 24 24" fill="none">
+      <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5a2.5 2.5 0 110-5 2.5 2.5 0 010 5z" fill={color} />
+    </svg>
+  ),
+  myday: (color) => (
+    <svg width="26" height="26" viewBox="0 0 24 24" fill="none">
+      <rect x="3" y="4" width="18" height="18" rx="3" stroke={color} strokeWidth="2" />
+      <path d="M3 10h18" stroke={color} strokeWidth="2" />
+      <path d="M8 2v4M16 2v4" stroke={color} strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  ),
+  social: (color) => (
+    <svg width="28" height="26" viewBox="0 0 24 24" fill="none">
+      <circle cx="9" cy="7" r="3.5" fill={color} />
+      <path d="M2 19c0-3.31 3.13-6 7-6s7 2.69 7 6" fill={color} />
+      <circle cx="17" cy="8" r="2.5" fill={color} />
+      <path d="M22 19c0-2.21-1.79-4.5-4.5-5.2" stroke={color} strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+  ),
+  me: (color) => (
+    <svg width="26" height="26" viewBox="0 0 24 24" fill="none">
+      <circle cx="12" cy="8" r="4" fill={color} />
+      <path d="M4 21c0-3.87 3.58-7 8-7s8 3.13 8 7" fill={color} />
+    </svg>
+  ),
+};
+
 const PAGE_TABS = [
   { key: 'explore', label: 'Explore' },
   { key: 'myday', label: 'My Day' },
@@ -133,8 +162,8 @@ export default function MapFeed({
   const [isMyDayPlacesExpanded, setIsMyDayPlacesExpanded] = useState(false);
 
   const detents = useMemo(() => {
-    const collapsedVisible = 130;
-    const mediumVisible = Math.min(Math.max(sheetHeight * 0.5, 250), 340);
+    const collapsedVisible = 17;
+    const mediumVisible = Math.min(sheetHeight, window.innerHeight * 0.4);
 
     return {
       expanded: 0,
@@ -349,7 +378,7 @@ export default function MapFeed({
   }, []);
 
   useEffect(() => {
-    snapTo(selectedCluster ? 'expanded' : 'medium');
+    snapTo('medium');
   }, [selectedCluster, selectedHall, snapTo]);
 
   const focusMapOnHall = useCallback((hall) => {
@@ -383,9 +412,9 @@ export default function MapFeed({
         });
       }
 
-      setSheetOffset(detents.expanded);
+      setSheetOffset(detents.medium);
     },
-    [detents.expanded, focusMapOnHall]
+    [detents.medium, focusMapOnHall]
   );
 
   const recenterOnUser = useCallback(() => {
@@ -712,38 +741,23 @@ export default function MapFeed({
         </button>
       ) : null}
 
-      <div
-        style={{
-          ...styles.sheet,
-          height: `max(60px, calc(min(72vh, 540px) - ${sheetOffset}px))`,
-          transition: isDragging ? 'none' : 'height 260ms cubic-bezier(0.22, 1, 0.36, 1)',
-        }}>
+      <div style={styles.tray}>
         <div
-          ref={sheetRef}
           style={{
-            height: 'min(72vh, 540px)',
-            width: '100%',
-            flexShrink: 0,
-            display: 'flex',
-            flexDirection: 'column',
+            ...styles.contentArea,
+            height: `max(0px, calc(100dvh - 72px - ${sheetOffset}px))`,
+            transition: isDragging ? 'none' : 'height 200ms cubic-bezier(0.32, 0.72, 0, 1)',
           }}>
-        <div style={styles.sheetDragArea}>
-          <div
-            style={styles.grabberWrap}
-            onMouseDown={(event) => startDrag(event.clientY)}
-            onTouchStart={(event) => {
-              const touch = event.touches[0];
-              if (touch) startDrag(touch.clientY);
-            }}>
-            <div style={styles.grabber} />
-          </div>
-          <div style={styles.sheetControlsRow}>
-            <div style={{ flex: 1 }} />
-            <button style={styles.minimizeButton} onClick={toggleSheet} aria-label={isSheetLow ? "Maximize sheet" : "Minimize sheet"}>
-              {isSheetLow ? "^" : "V"}
-            </button>
-          </div>
-        </div>
+          <div ref={sheetRef} style={styles.contentInner}>
+            <div
+              style={styles.sheetHeader}
+              onMouseDown={(event) => startDrag(event.clientY)}
+              onTouchStart={(event) => {
+                const touch = event.touches[0];
+                if (touch) startDrag(touch.clientY);
+              }}>
+              <div style={styles.grabber} />
+            </div>
 
         {selectedHall ? (
           <div style={styles.focusedSheetContent}>
@@ -1174,20 +1188,22 @@ export default function MapFeed({
             </div>
           </div>
         )}
+          </div>
         </div>
-      </div>
 
-      {/* Floating Tab Bar */}
-      <div style={styles.floatingTabBar}>
-        <div style={styles.pageTabsWrap}>
+        {/* Tab Bar */}
+        <div style={{
+          ...styles.tabBar,
+          borderTop: sheetOffset >= detents.collapsed - 2 ? 'none' : '1px solid rgba(0,0,0,0.06)',
+        }}>
           {PAGE_TABS.map((tab, index) => {
             const selected = activePageIndex === index;
             return (
               <button
                 key={tab.key}
                 style={{
-                  ...styles.pageTabButton,
-                  ...(selected ? styles.pageTabButtonActive : null),
+                  ...styles.tabButton,
+                  ...(selected ? styles.tabButtonActive : null),
                 }}
                 onClick={() => {
                   setSelectedHall(null);
@@ -1201,13 +1217,7 @@ export default function MapFeed({
                     pagerRef.current.scrollTo({ left: pageWidth * index, behavior: 'smooth' });
                   }
                 }}>
-                <span
-                  style={{
-                    ...styles.pageTabLabel,
-                    ...(selected ? styles.pageTabLabelActive : null),
-                  }}>
-                  {tab.label}
-                </span>
+                {TAB_ICONS[tab.key](selected ? '#500000' : 'rgba(0,0,0,0.25)')}
               </button>
             );
           })}
@@ -1222,31 +1232,32 @@ const styles = {
     width: '100%',
     height: '100%',
     position: 'relative',
+    overflow: 'hidden',
   },
   pin: {
-    width: 38,
-    height: 38,
+    width: 34,
+    height: 34,
     borderRadius: '50%',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     cursor: 'pointer',
-    transition: 'transform 160ms ease',
+    transition: 'transform 120ms ease',
     border: '2px solid white',
   },
   pinGlyph: {
-    fontSize: 16,
+    fontSize: 14,
     lineHeight: 1,
   },
   markerBadge: {
     position: 'absolute',
-    top: -6,
-    right: -8,
+    top: -5,
+    right: -7,
     backgroundColor: '#DC2626',
     borderRadius: 10,
-    minWidth: 18,
-    height: 18,
-    padding: '0 4px',
+    minWidth: 16,
+    height: 16,
+    padding: '0 3px',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1260,9 +1271,9 @@ const styles = {
     right: -6,
     backgroundColor: '#D98A2B',
     borderRadius: 10,
-    minWidth: 18,
-    height: 18,
-    padding: '0 4px',
+    minWidth: 16,
+    height: 16,
+    padding: '0 3px',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1272,30 +1283,30 @@ const styles = {
   },
   markerBadgeText: {
     color: 'white',
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: '800',
     lineHeight: 1,
   },
   clusterBubble: {
-    width: 44,
-    height: 44,
+    width: 40,
+    height: 40,
     borderRadius: '50%',
     backgroundColor: '#500000',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     cursor: 'pointer',
-    border: '3px solid white',
-    boxShadow: '0 6px 14px rgba(80,0,0,0.3)',
+    border: '2.5px solid white',
+    boxShadow: '0 4px 12px rgba(80,0,0,0.25)',
   },
   clusterCount: {
     color: 'white',
     fontWeight: 700,
-    fontSize: 16,
+    fontSize: 14,
   },
   userDot: {
-    width: 22,
-    height: 22,
+    width: 20,
+    height: 20,
     borderRadius: '50%',
     backgroundColor: 'rgba(47,111,237,0.22)',
     display: 'flex',
@@ -1303,126 +1314,110 @@ const styles = {
     justifyContent: 'center',
   },
   userDotInner: {
-    width: 10,
-    height: 10,
+    width: 9,
+    height: 9,
     borderRadius: '50%',
     backgroundColor: '#2F6FED',
     border: '2px solid white',
   },
   recenterBtn: {
     position: 'absolute',
-    right: 18,
-    top: 18,
-    width: 48,
-    height: 48,
+    right: 14,
+    top: 14,
+    width: 40,
+    height: 40,
     borderRadius: '50%',
     backgroundColor: 'rgba(255,255,255,0.96)',
     backdropFilter: 'blur(10px)',
     WebkitBackdropFilter: 'blur(10px)',
-    border: '1px solid rgba(0,0,0,0.08)',
-    boxShadow: '0 10px 22px rgba(22,18,15,0.16)',
+    border: '1px solid rgba(0,0,0,0.06)',
+    boxShadow: '0 2px 10px rgba(0,0,0,0.1)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     cursor: 'pointer',
-    fontSize: 21,
+    fontSize: 18,
     zIndex: 10,
   },
-  sheet: {
+
+  /* ── Tray (single container: content + tabs) ── */
+  tray: {
     position: 'absolute',
-    left: 12,
-    right: 12,
-    bottom: 12,
-    height: 'min(72vh, 540px)',
-    borderRadius: 30,
-    backgroundColor: 'rgba(248,245,240,0.98)',
-    backdropFilter: 'blur(20px)',
-    WebkitBackdropFilter: 'blur(20px)',
-    boxShadow: '0 20px 42px rgba(23,18,15,0.18)',
-    border: '1px solid rgba(255,255,255,0.86)',
+    bottom: 10,
+    left: 14,
+    right: 14,
+    zIndex: 100,
+    display: 'flex',
+    flexDirection: 'column',
+    borderRadius: 16,
+    backgroundColor: 'rgba(248,245,240,0.95)',
+    backdropFilter: 'blur(28px)',
+    WebkitBackdropFilter: 'blur(28px)',
+    boxShadow: '0 4px 24px rgba(80,0,0,0.2), 0 1px 6px rgba(80,0,0,0.1)',
     overflow: 'hidden',
+  },
+  contentArea: {
+    overflow: 'hidden',
+    willChange: 'height',
+  },
+  contentInner: {
+    height: 'calc(100dvh - 72px)',
     display: 'flex',
     flexDirection: 'column',
   },
-  sheetDragArea: {
-    padding: '10px 18px 8px',
-    userSelect: 'none',
-  },
-  grabberWrap: {
-    cursor: 'grab',
+  sheetHeader: {
+    padding: '8px 14px 4px',
     userSelect: 'none',
     touchAction: 'none',
-    paddingBottom: 10,
-  },
-  grabber: {
-    width: 42,
-    height: 5,
-    borderRadius: 999,
-    backgroundColor: '#D2C7C1',
-    margin: '0 auto',
-  },
-  floatingTabBar: {
-    position: 'absolute',
-    bottom: 0,
-    left: 12,
-    right: 12,
-    zIndex: 100,
-  },
-  pageTabsWrap: {
-    backgroundColor: 'rgba(248,245,240,0.98)',
-    backdropFilter: 'blur(20px)',
-    WebkitBackdropFilter: 'blur(20px)',
-    padding: '12px 16px 24px 16px',
-    display: 'flex',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    borderTop: '1px solid rgba(255,255,255,0.86)',
-  },
-  sheetControlsRow: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 10,
-  },
-  pageTabButton: {
-    flex: 1,
-    minHeight: 52,
-    borderRadius: 20,
-    border: 'none',
-    backgroundColor: 'transparent',
-    cursor: 'pointer',
-    transition: 'all 160ms ease',
+    cursor: 'grab',
+    flexShrink: 0,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: '0 12px',
   },
-  pageTabButtonActive: {
-    backgroundColor: '#FFFFFF',
-    boxShadow: '0 2px 10px rgba(30,26,23,0.08)',
+  grabber: {
+    width: 40,
+    height: 5,
+    borderRadius: 999,
+    backgroundColor: 'rgba(0,0,0,0.18)',
   },
-  pageTabLabel: {
-    fontSize: 15,
-    fontWeight: 800,
-    color: '#7A6D67',
-    transition: 'color 160ms ease',
+
+  /* ── Tab Bar (persistent bottom of the tray) ── */
+  tabBar: {
+    display: 'flex',
+    flexDirection: 'row',
+    gap: 2,
+    padding: '4px 4px 6px',
+    flexShrink: 0,
+    transition: 'border-top 200ms ease',
   },
-  pageTabLabelActive: {
-    color: '#2B2320',
-  },
-  minimizeButton: {
-    minHeight: 38,
-    borderRadius: 14,
-    border: '1px solid #E2D9D2',
-    backgroundColor: '#FFFFFF',
-    color: '#5D514C',
-    fontSize: 12,
-    fontWeight: 700,
-    padding: '0 12px',
+  tabButton: {
+    flex: 1,
+    height: 42,
+    borderRadius: 13,
+    border: 'none',
+    backgroundColor: 'transparent',
     cursor: 'pointer',
-    boxShadow: '0 2px 6px rgba(30,26,23,0.08)',
-    whiteSpace: 'nowrap',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    transition: 'all 140ms ease',
+    padding: 0,
   },
+  tabButtonActive: {},
+  tabLabel: {
+    fontSize: 12,
+    fontWeight: 600,
+    color: 'rgba(0,0,0,0.34)',
+    transition: 'color 140ms ease',
+    letterSpacing: -0.1,
+  },
+  tabLabelActive: {
+    color: '#1a1a1a',
+    fontWeight: 700,
+  },
+
+  /* ── Content areas ── */
   pagerScroll: {
     flex: 1,
     display: 'flex',
@@ -1439,111 +1434,119 @@ const styles = {
     width: '100%',
     scrollSnapAlign: 'start',
     overflowY: 'auto',
+    overscrollBehavior: 'contain',
   },
   sheetContent: {
-    padding: '0 18px 84px',
+    padding: '0 14px 28px',
     display: 'flex',
     flexDirection: 'column',
-    gap: 16,
+    gap: 10,
   },
   focusedSheetContent: {
     overflowY: 'auto',
-    padding: '0 18px 84px',
+    overscrollBehavior: 'contain',
+    padding: '0 14px 28px',
     display: 'flex',
     flexDirection: 'column',
-    gap: 16,
+    gap: 10,
   },
   sectionDivider: {
     height: 1,
-    backgroundColor: '#E8E2DA',
-    margin: '8px 0',
+    backgroundColor: 'rgba(0,0,0,0.06)',
+    margin: '4px 0',
   },
+
+  /* ── Hero block ── */
   heroBlock: {
     display: 'flex',
     flexDirection: 'column',
-    gap: 6,
+    gap: 2,
   },
   eyebrow: {
     margin: 0,
-    fontSize: 12,
-    fontWeight: 700,
-    letterSpacing: 0.6,
+    fontSize: 10,
+    fontWeight: 600,
+    letterSpacing: 0.5,
     textTransform: 'uppercase',
     color: '#8A7B74',
   },
   title: {
     margin: 0,
-    fontSize: 30,
-    lineHeight: 1.1,
-    fontWeight: 800,
-    color: '#241C1A',
+    fontSize: 20,
+    lineHeight: 1.15,
+    fontWeight: 700,
+    color: '#1a1a1a',
+    letterSpacing: -0.4,
   },
   body: {
     margin: 0,
-    fontSize: 14,
-    lineHeight: 1.45,
+    fontSize: 12,
+    lineHeight: 1.3,
     color: '#6E625D',
   },
+
+  /* ── Cards ── */
   primaryCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    padding: 18,
-    border: '1px solid #EFE6DE',
+    borderRadius: 14,
+    padding: 12,
+    border: '1px solid rgba(0,0,0,0.06)',
     display: 'flex',
     flexDirection: 'column',
-    gap: 12,
+    gap: 8,
   },
   focusedPrimaryCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    padding: 18,
-    boxShadow: '0 16px 36px rgba(80,0,0,0.16), 0 6px 16px rgba(80,0,0,0.10)',
+    borderRadius: 14,
+    padding: 12,
+    boxShadow: '0 4px 16px rgba(80,0,0,0.1)',
     display: 'flex',
     flexDirection: 'column',
-    gap: 12,
+    gap: 8,
   },
   menuButton: {
-    marginTop: 8,
+    marginTop: 4,
     backgroundColor: '#500000',
     color: '#FFFFFF',
     border: 'none',
     borderRadius: 999,
-    padding: '12px 20px',
-    fontSize: 15,
-    fontWeight: '700',
+    padding: '9px 16px',
+    fontSize: 13,
+    fontWeight: '600',
     cursor: 'pointer',
     textAlign: 'center',
-    transition: 'background-color 160ms',
+    transition: 'opacity 120ms',
+    letterSpacing: -0.1,
   },
   inviteCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    padding: 18,
-    boxShadow: '0 16px 36px rgba(80,0,0,0.16), 0 6px 16px rgba(80,0,0,0.10)',
+    borderRadius: 14,
+    padding: 12,
+    boxShadow: '0 4px 16px rgba(80,0,0,0.1)',
     display: 'flex',
     flexDirection: 'column',
-    gap: 14,
+    gap: 8,
   },
   clusterListCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    padding: 18,
-    boxShadow: '0 16px 36px rgba(80,0,0,0.16), 0 6px 16px rgba(80,0,0,0.10)',
+    borderRadius: 14,
+    padding: 12,
+    boxShadow: '0 4px 16px rgba(80,0,0,0.1)',
     display: 'flex',
     flexDirection: 'column',
-    gap: 14,
+    gap: 8,
   },
   inviteHeader: {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 12,
+    gap: 8,
   },
   inviteEyebrow: {
     margin: 0,
-    fontSize: 12,
-    fontWeight: 700,
-    letterSpacing: 0.6,
+    fontSize: 10,
+    fontWeight: 600,
+    letterSpacing: 0.5,
     textTransform: 'uppercase',
     color: '#8A7B74',
   },
@@ -1551,71 +1554,71 @@ const styles = {
     backgroundColor: '#FFF3E3',
     color: '#A45B1C',
     borderRadius: 999,
-    padding: '6px 10px',
-    fontSize: 11,
-    fontWeight: 700,
+    padding: '2px 7px',
+    fontSize: 10,
+    fontWeight: 600,
     whiteSpace: 'nowrap',
   },
   inviteList: {
     display: 'flex',
     flexDirection: 'column',
-    gap: 10,
+    gap: 4,
   },
   inviteRow: {
-    borderRadius: 18,
-    backgroundColor: '#FBF8F4',
-    border: '1px solid #EFE6DE',
-    padding: 14,
+    borderRadius: 10,
+    backgroundColor: 'rgba(0,0,0,0.02)',
+    border: '1px solid rgba(0,0,0,0.05)',
+    padding: 10,
   },
   inviteCopy: {
     display: 'flex',
     flexDirection: 'column',
-    gap: 4,
+    gap: 2,
   },
   inviteTopLine: {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 10,
+    gap: 8,
   },
   inviteName: {
-    fontSize: 15,
-    fontWeight: 700,
-    color: '#2B2320',
+    fontSize: 13,
+    fontWeight: 600,
+    color: '#1a1a1a',
   },
   inviteStatus: {
-    fontSize: 11,
-    fontWeight: 700,
+    fontSize: 10,
+    fontWeight: 600,
     color: '#A45B1C',
     backgroundColor: '#FFF3E3',
     borderRadius: 999,
-    padding: '4px 8px',
+    padding: '2px 6px',
     whiteSpace: 'nowrap',
   },
   inviteMeta: {
-    fontSize: 12,
+    fontSize: 11,
     color: '#7A6E69',
-    lineHeight: 1.4,
+    lineHeight: 1.3,
   },
   inviteMessage: {
-    fontSize: 13,
+    fontSize: 12,
     color: '#564B46',
-    lineHeight: 1.45,
+    lineHeight: 1.3,
   },
   inviteActions: {
     display: 'flex',
     flexDirection: 'row',
-    gap: 8,
-    marginTop: 6,
+    gap: 6,
+    marginTop: 4,
   },
   acceptInviteButton: {
     border: '1px solid #BBF7D0',
     backgroundColor: '#F0FDF4',
     color: '#15803D',
     borderRadius: 999,
-    padding: '8px 12px',
-    fontSize: 12,
-    fontWeight: 700,
+    padding: '5px 10px',
+    fontSize: 11,
+    fontWeight: 600,
     cursor: 'pointer',
   },
   declineInviteButton: {
@@ -1623,166 +1626,181 @@ const styles = {
     backgroundColor: '#FEF2F2',
     color: '#B91C1C',
     borderRadius: 999,
-    padding: '8px 12px',
-    fontSize: 12,
-    fontWeight: 700,
+    padding: '5px 10px',
+    fontSize: 11,
+    fontWeight: 600,
     cursor: 'pointer',
   },
+
+  /* ── Shared card internals ── */
   primaryHeader: {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    gap: 12,
+    gap: 8,
   },
   primaryTitleWrap: {
     display: 'flex',
     flexDirection: 'column',
-    gap: 4,
+    gap: 2,
     flex: 1,
   },
   primaryTitle: {
     margin: 0,
-    fontSize: 20,
-    fontWeight: 800,
-    color: '#241C1A',
+    fontSize: 15,
+    fontWeight: 700,
+    color: '#1a1a1a',
+    letterSpacing: -0.2,
   },
   primaryMeta: {
     margin: 0,
-    fontSize: 13,
+    fontSize: 11,
     color: '#7B6F69',
   },
   recommendedBadge: {
     backgroundColor: '#E8F0FF',
     color: '#2F6FED',
     borderRadius: 999,
-    padding: '6px 10px',
-    fontSize: 11,
-    fontWeight: 700,
+    padding: '2px 7px',
+    fontSize: 10,
+    fontWeight: 600,
     whiteSpace: 'nowrap',
   },
   clearButton: {
-    width: 30,
-    height: 30,
+    width: 24,
+    height: 24,
     borderRadius: '50%',
     border: 'none',
-    backgroundColor: '#F2ECE7',
+    backgroundColor: 'rgba(0,0,0,0.05)',
     color: '#6B625D',
-    fontSize: 21,
+    fontSize: 15,
     cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    lineHeight: 1,
   },
   infoRow: {
     display: 'flex',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
     color: '#564B46',
   },
   infoIcon: {
-    fontSize: 15,
+    fontSize: 11,
+    fontWeight: 600,
+    color: '#8A7B74',
   },
   infoText: {
-    fontSize: 14,
-    fontWeight: 600,
+    fontSize: 12,
+    fontWeight: 500,
     color: '#564B46',
   },
   sectionHeader: {
     display: 'flex',
     flexDirection: 'column',
-    gap: 4,
+    gap: 2,
   },
   sectionTitle: {
     margin: 0,
-    fontSize: 18,
+    fontSize: 14,
     fontWeight: 700,
-    color: '#2F2825',
+    color: '#1a1a1a',
+    letterSpacing: -0.2,
   },
   sectionCaption: {
     margin: 0,
-    fontSize: 13,
+    fontSize: 11,
     color: '#7B706B',
   },
+
+  /* ── Place list ── */
   placeList: {
     display: 'flex',
     flexDirection: 'column',
-    gap: 10,
+    gap: 3,
   },
   placeRow: {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 12,
+    gap: 8,
     backgroundColor: '#FFFFFF',
-    borderRadius: 18,
-    padding: 14,
-    border: '1px solid #EFE6DE',
+    borderRadius: 10,
+    padding: '7px 10px',
+    border: '1px solid rgba(0,0,0,0.05)',
     cursor: 'pointer',
     textAlign: 'left',
+    transition: 'background-color 80ms',
   },
   placeRowSelected: {
-    backgroundColor: '#F7FAFF',
+    backgroundColor: '#F0F5FF',
     borderColor: '#C8DCF8',
   },
   placeRowMain: {
     display: 'flex',
     alignItems: 'center',
-    gap: 12,
+    gap: 8,
     flex: 1,
     minWidth: 0,
   },
   placeIconWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: '50%',
-    backgroundColor: '#F6F1EC',
+    width: 28,
+    height: 28,
+    borderRadius: 7,
+    backgroundColor: 'rgba(0,0,0,0.04)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
   },
   placeIcon: {
-    fontSize: 16,
+    fontSize: 11,
+    fontWeight: 700,
   },
   placeCopy: {
     display: 'flex',
     flexDirection: 'column',
-    gap: 4,
+    gap: 1,
     minWidth: 0,
     flex: 1,
   },
   placeTitleRow: {
     display: 'flex',
     alignItems: 'center',
-    gap: 8,
+    gap: 5,
     flexWrap: 'wrap',
   },
   placeName: {
-    fontSize: 15,
-    fontWeight: 700,
-    color: '#2B2320',
+    fontSize: 13,
+    fontWeight: 600,
+    color: '#1a1a1a',
+    letterSpacing: -0.1,
   },
   inlineBadge: {
-    backgroundColor: '#F3E7E0',
+    backgroundColor: 'rgba(80,0,0,0.07)',
     color: '#7A4333',
     borderRadius: 999,
-    padding: '4px 8px',
-    fontSize: 10,
-    fontWeight: 700,
+    padding: '1px 5px',
+    fontSize: 9,
+    fontWeight: 600,
   },
   clusterInlineBadge: {
     backgroundColor: '#FFF3E3',
     color: '#A45B1C',
     borderRadius: 999,
-    padding: '4px 8px',
-    fontSize: 10,
-    fontWeight: 700,
+    padding: '1px 5px',
+    fontSize: 9,
+    fontWeight: 600,
   },
   placeMeta: {
-    fontSize: 12,
-    lineHeight: 1.4,
+    fontSize: 11,
+    lineHeight: 1.25,
     color: '#7A6E69',
   },
   placeChevron: {
-    color: '#9A8F89',
-    fontSize: 24,
+    color: 'rgba(0,0,0,0.18)',
+    fontSize: 16,
     lineHeight: 1,
     flexShrink: 0,
   },
