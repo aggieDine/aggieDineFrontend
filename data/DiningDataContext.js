@@ -113,6 +113,30 @@ export function DiningDataProvider({ children }) {
     if (user) loadData(idToken);
   }, [user, idToken, loadData]);
 
+  // Decrement closesIn every minute for real-time countdown
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setDiningHalls((prev) =>
+        prev.map((hall) => {
+          if (hall.status?.closesIn == null) return hall;
+          const next = hall.status.closesIn - 1;
+          if (next <= 0) {
+            return { ...hall, status: { ...hall.status, isOpen: false, closesIn: null } };
+          }
+          return { ...hall, status: { ...hall.status, closesIn: next } };
+        })
+      );
+    }, 60000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // Re-fetch from API every 10 minutes
+  useEffect(() => {
+    if (!user) return;
+    const timer = setInterval(() => loadData(idToken), 600000);
+    return () => clearInterval(timer);
+  }, [user, idToken, loadData]);
+
   const getDiningHallById = useCallback(
     (id) => diningHalls.find((hall) => hall.id === id) ?? null,
     [diningHalls]

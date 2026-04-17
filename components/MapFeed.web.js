@@ -219,6 +219,7 @@ export default function MapFeed({
   const [activePageIndex, setActivePageIndex] = useState(0);
   const [groupInvites, setGroupInvites] = useState([]);
   const [isMyDayPlacesExpanded, setIsMyDayPlacesExpanded] = useState(false);
+  const [isClosedExpanded, setIsClosedExpanded] = useState(false);
   const [deviceHeading, setDeviceHeading] = useState(null);
   const [compassPermission, setCompassPermission] = useState('unknown');
 
@@ -1093,67 +1094,13 @@ export default function MapFeed({
             {/* Page 0: Explore (Near Me) */}
             <div style={styles.pagerPage}>
               <div style={styles.sheetContent}>
-                {activeHall ? (() => {
-                  const hasCoords = userLocation && activeHall.coordinates;
-                  const absBearing = hasCoords
-                    ? getAbsoluteBearing(
-                        userLocation.latitude, userLocation.longitude,
-                        activeHall.coordinates.latitude, activeHall.coordinates.longitude
-                      )
-                    : null;
-                  const useCompass = deviceHeading != null && absBearing != null;
-                  const rotationDeg = useCompass ? (absBearing - deviceHeading + 360) % 360 : null;
-                  const fallbackDir = hasCoords
-                    ? getBearingDirection(
-                        userLocation.latitude, userLocation.longitude,
-                        activeHall.coordinates.latitude, activeHall.coordinates.longitude
-                      )
-                    : null;
-                  return (
-                    <div style={styles.primaryCard}>
-                      <div style={{ ...styles.primaryHeader, alignItems: 'center' }}>
-                        <div style={styles.primaryTitleWrap}>
-                          <h3 style={styles.primaryTitle}>{activeHall.name}</h3>
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: 0 }}>
-                            <p style={{ ...styles.primaryMeta, margin: 0 }}>
-                              {activeHall.status?.isOpen ? (
-                                <>
-                                  <span style={{ color: '#22A45D', fontWeight: 700, animation: 'statusPulse 2.5s ease-in-out infinite' }}>Open</span>
-                                  <span> · Closes in 2h 15m</span>
-                                </>
-                              ) : (
-                                <span style={{ color: '#D64545', fontWeight: 700 }}>Closed</span>
-                              )}
-                            </p>
-                            <span style={styles.recommendedBadge}>Recommended</span>
-                          </div>
-                        </div>
-                        {hasCoords && activeDistance ? (
-                          <div
-                            style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flexShrink: 0, cursor: compassPermission === 'unknown' ? 'pointer' : 'default' }}
-                            onClick={compassPermission === 'unknown' ? requestCompass : undefined}>
-                            {useCompass ? (
-                              <span style={{ fontSize: 24, lineHeight: 1, color: '#500000', transition: 'transform 150ms ease-out', transform: `rotate(${rotationDeg}deg)` }}>↑</span>
-                            ) : compassPermission === 'unknown' ? (
-                              <span style={{ fontSize: 13, color: '#500000', fontWeight: 600 }}>🧭</span>
-                            ) : (
-                              <span style={{ fontSize: 22, lineHeight: 1, color: '#500000' }}>{DIRECTION_ARROWS[fallbackDir]}</span>
-                            )}
-                            <span style={{ fontSize: 11, fontWeight: 600, color: '#564B46', marginTop: 2 }}>{activeDistance}</span>
-                          </div>
-                        ) : null}
-                      </div>
-                    </div>
-                  );
-                })() : null}
-
                 <div style={styles.sectionHeader}>
                   <h3 style={styles.sectionTitle}>Dining Places</h3>
                   <p style={styles.sectionCaption}>Nearest spots based on your current location.</p>
                 </div>
 
                 <div style={styles.placeList}>
-                  {places.map((hall) => {
+                  {places.filter((h) => h.status?.isOpen).map((hall) => {
                     const distance =
                       userLocation && hall.coordinates
                         ? formatDistanceMiles(
@@ -1194,10 +1141,14 @@ export default function MapFeed({
                           <div style={styles.primaryTitleWrap}>
                             <h3 style={styles.primaryTitle}>{hall.name}</h3>
                             <p style={{ ...styles.primaryMeta, margin: 0 }}>
-                              {hall.status?.isOpen ? (
+                              {hall.category ?? 'Dining'} · {hall.status?.isOpen ? (
                                 <>
-                                  <span style={{ color: '#22A45D', fontWeight: 700, animation: 'statusPulse 2.5s ease-in-out infinite' }}>Open</span>
-                                  <span> · Closes in 2h 15m</span>
+                                  <span style={{ color: '#22A45D', fontWeight: 700 }}>Open</span>
+                                  {hall.status?.closesIn != null ? (
+                                    hall.status.closesIn <= 60
+                                      ? <span> · Closes in {hall.status.closesIn}m</span>
+                                      : <span> · Closes {new Date(Date.now() + hall.status.closesIn * 60000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span>
+                                  ) : null}
                                 </>
                               ) : (
                                 <span style={{ color: '#D64545', fontWeight: 700 }}>Closed</span>
@@ -1219,118 +1170,66 @@ export default function MapFeed({
                     );
                   })}
                 </div>
+
+                {places.some((h) => !h.status?.isOpen) ? (
+                  <>
+                    <div
+                      style={{ ...styles.sectionHeader, cursor: 'pointer', display: 'flex', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}
+                      onClick={() => setIsClosedExpanded(!isClosedExpanded)}>
+                      <div>
+                        <h3 style={styles.sectionTitle}>Closed</h3>
+                        <p style={styles.sectionCaption}>{places.filter((h) => !h.status?.isOpen).length} locations</p>
+                      </div>
+                      <span style={{ color: '#9A8F89', fontWeight: 'bold', fontSize: 14 }}>
+                        {isClosedExpanded ? '▲' : '▼'}
+                      </span>
+                    </div>
+
+                    {isClosedExpanded ? (
+                      <div style={styles.placeList}>
+                        {places.filter((h) => !h.status?.isOpen).map((hall) => {
+                          const distance =
+                            userLocation && hall.coordinates
+                              ? formatDistanceMiles(
+                                  getDistanceKm(
+                                    userLocation.latitude,
+                                    userLocation.longitude,
+                                    hall.coordinates.latitude,
+                                    hall.coordinates.longitude
+                                  )
+                                )
+                              : null;
+
+                          return (
+                            <div
+                              key={hall.id}
+                              style={{ ...styles.primaryCard, opacity: 0.6 }}
+                              onClick={() => {
+                                router.push(`/restaurant/${hall.id}`);
+                                focusMapOnHall(hall);
+                              }}>
+                              <div style={{ ...styles.primaryHeader, alignItems: 'center', cursor: 'pointer' }}>
+                                <div style={styles.primaryTitleWrap}>
+                                  <h3 style={styles.primaryTitle}>{hall.name}</h3>
+                                  <p style={{ ...styles.primaryMeta, margin: 0 }}>
+                                    {hall.category ?? 'Dining'} · <span style={{ color: '#D64545', fontWeight: 700 }}>Closed</span>
+                                  </p>
+                                </div>
+                                {distance ? (
+                                  <span style={{ fontSize: 11, fontWeight: 600, color: '#564B46' }}>{distance}</span>
+                                ) : null}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : null}
+                  </>
+                ) : null}
               </div>
             </div>
-          ) : (
-            <div
-              ref={pagerRef}
-              style={styles.pagerScroll}
-              onScroll={(e) => {
-                const el = e.currentTarget;
-                const page = Math.round(el.scrollLeft / el.offsetWidth);
-                if (page !== activePageIndex) {
-                  setActivePageIndex(page);
-                  if (page === EXPLORE_PAGE_INDEX) onRecommendationModeChange?.('location');
-                  else if (page === MY_DAY_PAGE_INDEX) onRecommendationModeChange?.('schedule');
-                }
-              }}>
-              {/* Page 0: Explore (Near Me) */}
-              <div style={styles.pagerPage}>
-                <div style={styles.sheetContent}>
-                  <div style={styles.heroBlock}>
-                    <p style={styles.eyebrow}>{exploreCopy.eyebrow}</p>
-                    <h2 style={styles.title}>{exploreCopy.title}</h2>
-                    <p style={styles.body}>{exploreCopy.body}</p>
-                  </div>
 
-                  {activeHall ? (
-                    <div style={styles.primaryCard}>
-                      <div style={styles.primaryHeader}>
-                        <div style={styles.primaryTitleWrap}>
-                          <h3 style={styles.primaryTitle}>{activeHall.name}</h3>
-                          <p style={styles.primaryMeta}>
-                            {activeHall.category ?? 'Dining Spot'} | {getStatusLabel(activeHall)}
-                          </p>
-                        </div>
-                        <span style={styles.recommendedBadge}>Recommended</span>
-                      </div>
-
-                      {activeDistance ? (
-                        <div style={styles.infoRow}>
-                          <span style={styles.infoIcon}>Walk</span>
-                          <span style={styles.infoText}>{activeDistance}</span>
-                        </div>
-                      ) : null}
-
-                      <div style={styles.infoRow}>
-                        <span style={styles.infoIcon}>Near</span>
-                        <span style={styles.infoText}>Anchored to your live location</span>
-                      </div>
-                    </div>
-                  ) : null}
-
-                  <div style={styles.sectionHeader}>
-                    <h3 style={styles.sectionTitle}>Dining Places</h3>
-                    <p style={styles.sectionCaption}>Nearest spots based on your current location.</p>
-                  </div>
-
-                  <div style={styles.placeList}>
-                    {places.map((hall) => {
-                      const selected = hall.id === selectedHall?.id;
-                      const recommended = hall.id === suggestion?.id;
-                      const distance =
-                        userLocation && hall.coordinates
-                          ? formatDistanceMiles(
-                            getDistanceKm(
-                              userLocation.latitude,
-                              userLocation.longitude,
-                              hall.coordinates.latitude,
-                              hall.coordinates.longitude
-                            )
-                          )
-                          : null;
-
-                      return (
-                        <button
-                          key={hall.id}
-                          style={{
-                            ...styles.placeRow,
-                            ...(selected ? styles.placeRowSelected : null),
-                          }}
-                          onClick={() => {
-                            router.push(`/restaurant/${hall.id}`);
-                            focusMapOnHall(hall);
-                          }}>
-                          <div style={styles.placeRowMain}>
-                            <div style={styles.placeIconWrap}>
-                              <span
-                                style={{
-                                  ...styles.placeIcon,
-                                  color: recommended ? '#2F6FED' : hall.status?.isOpen ? '#1B8B4B' : '#B44A4A',
-                                }}>
-                                Eat
-                              </span>
-                            </div>
-                            <div style={styles.placeCopy}>
-                              <div style={styles.placeTitleRow}>
-                                <span style={styles.placeName}>{hall.name}</span>
-                                {recommended ? <span style={styles.inlineBadge}>For you</span> : null}
-                              </div>
-                              <span style={styles.placeMeta}>
-                                {hall.category ?? 'Dining Spot'} | {getStatusLabel(hall)}
-                                {distance ? ` | ${distance}` : ''}
-                              </span>
-                            </div>
-                          </div>
-                          <span style={styles.placeChevron}>{'>'}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-
-              {/* Page 1: My Day (Before Class) */}
+            {/* Page 1: My Day (Before Class) */}
               <div style={styles.pagerPage}>
                 <div style={styles.sheetContent}>
                   <div style={styles.heroBlock}>
@@ -1348,7 +1247,6 @@ export default function MapFeed({
                             {activeHall.category ?? 'Dining Spot'} | {getStatusLabel(activeHall)}
                           </p>
                         </div>
-                        <span style={styles.recommendedBadge}>Recommended</span>
                       </div>
 
                       {activeDistance ? (
@@ -1453,23 +1351,8 @@ export default function MapFeed({
                 </div>
               </div>
             </div>
-
-            {/* Page 2: Social */}
-            <div style={styles.pagerPage}>
-              <div style={styles.sheetContent}>
-                <GroupsPanel />
-              </div>
-            </div>
-
-            {/* Page 3: Me */}
-            <div style={styles.pagerPage}>
-              <div style={styles.sheetContent}>
-                <MePanel />
-              </div>
-            </div>
-          </div>
         )}
-          </div>
+        </div>
         </div>
 
         {/* Tab Bar */}
