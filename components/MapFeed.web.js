@@ -199,6 +199,7 @@ function getMyDayCopy({ selectedHall, suggestion, nextClass }) {
 export default function MapFeed({
   diningHalls = [],
   suggestion,
+  recommendedList = [],
   nextClass,
   nextClassLocation,
   userLocation,
@@ -443,6 +444,19 @@ export default function MapFeed({
 
   const places = useMemo(() => {
     return [...diningHalls].sort((a, b) => {
+      // 1. Sort by API recommendation backend ordering first
+      if (recommendedList?.length > 0) {
+        const indexA = recommendedList.findIndex(hall => hall.id === a.id);
+        const indexB = recommendedList.findIndex(hall => hall.id === b.id);
+        
+        // If both are recommended, sort by the backend's explicit list order
+        if (indexA !== -1 && indexB !== -1) return indexA - indexB;
+        // If only one is recommended, push it to top
+        if (indexA !== -1) return -1;
+        if (indexB !== -1) return 1;
+      }
+      
+      // 2. Legacy fallback filtering if backend fails/unavailable
       const aRecommended = a.id === suggestion?.id ? 1 : 0;
       const bRecommended = b.id === suggestion?.id ? 1 : 0;
       if (aRecommended !== bRecommended) return bRecommended - aRecommended;
@@ -472,7 +486,7 @@ export default function MapFeed({
 
       return aDistance - bDistance;
     });
-  }, [diningHalls, suggestion, userLocation]);
+  }, [diningHalls, suggestion, recommendedList, userLocation]);
 
   const snapTo = useCallback(
     (position) => {

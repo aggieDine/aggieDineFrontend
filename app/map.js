@@ -35,11 +35,15 @@ export default function MapScreen() {
   const [locationLoading, setLocationLoading] = useState(true);
   const [nextClass, setNextClass] = useState(null);
   const [suggestion, setSuggestion] = useState(null);
+  const [recommendedList, setRecommendedList] = useState([]);
   const [recommendationMode, setRecommendationMode] = useState('schedule');
+  const [userDietary, setUserDietary] = useState([]);
+  const [userAllergies, setUserAllergies] = useState([]);
+
   const nextClassLocation =
     nextClass && CAMPUS_BUILDINGS[nextClass.building] ? CAMPUS_BUILDINGS[nextClass.building] : null;
 
-  const loading = menuLoading && diningHalls.length === 0 || locationLoading;
+  const loading = (menuLoading && diningHalls.length === 0) || locationLoading;
 
   useEffect(() => {
     (async () => {
@@ -89,6 +93,15 @@ export default function MapScreen() {
       }
       setNextClass(upcomingClass);
 
+      try {
+        const storedDietary = await AsyncStorage.getItem('userDietaryPreferences');
+        const storedAllergies = await AsyncStorage.getItem('userAllergySettings');
+        if (storedDietary) setUserDietary(JSON.parse(storedDietary));
+        if (storedAllergies) setUserAllergies(JSON.parse(storedAllergies));
+      } catch (e) {
+        console.error('Restrictions load error:', e);
+      }
+
       setLocationLoading(false);
     })();
   }, []);
@@ -108,21 +121,53 @@ export default function MapScreen() {
       targetLng = CAMPUS_BUILDINGS[nextClass.building].longitude;
     }
 
-    let bestPlace = null;
-    let minDistance = Infinity;
-
-    diningHalls.forEach((hall) => {
-      if (hall.status?.isOpen && hall.coordinates) {
-        const dist = getDistance(targetLat, targetLng, hall.coordinates.latitude, hall.coordinates.longitude);
-        if (dist < minDistance) {
-          minDistance = dist;
-          bestPlace = hall;
+    (async () => {
+      try {
+        const response = await fetch('http://localhost:8000/recommend/', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            current_location: { lat: userLocation.latitude, lon: userLocation.longitude },
+            center_of_interest: { lat: targetLat, lon: targetLng },
+            radius: 400.0,
+            user_id: 'anonymous', // update to actual user id if authenticated
+            dietary_preferences: userDietary.length > 0 ? userDietary : null,
+            allergies: userAllergies.length > 0 ? userAllergies : null,
+          }),
+        });
+        const data = await response.json();
+        
+        if (data.status === 'success' && data.results.length > 0) {
+          const orderedHalls = data.results.map((rec) => 
+            diningHalls.find((hall) => hall.name.toLowerCase() === rec.name.toLowerCase())
+          ).filter(Boolean);
+          
+          setRecommendedList(orderedHalls);
+          setSuggestion(orderedHalls[0] || null);
+        } else {
+          setRecommendedList([]);
+          setSuggestion(null); // No recommendations found that fit criteria
         }
-      }
-    });
+      } catch (err) {
+        console.error('Recommendation API error:', err);
+        // Fallback to local distance if API fails
+        let bestPlace = null;
+        let minDistance = Infinity;
 
-    setSuggestion(bestPlace);
-  }, [diningHalls, nextClass, recommendationMode, userLocation]);
+        diningHalls.forEach((hall) => {
+          if (hall.status?.isOpen && hall.coordinates) {
+            const dist = getDistance(targetLat, targetLng, hall.coordinates.latitude, hall.coordinates.longitude);
+            if (dist < minDistance) {
+              minDistance = dist;
+              bestPlace = hall;
+            }
+          }
+        });
+
+        setSuggestion(bestPlace);
+      }
+    })();
+  }, [diningHalls, nextClass, recommendationMode, userLocation, userDietary, userAllergies]);
 
   if (loading) {
     return (
@@ -138,6 +183,7 @@ export default function MapScreen() {
       <MapFeed
         diningHalls={diningHalls}
         suggestion={suggestion}
+        recommendedList={recommendedList}
         nextClass={nextClass}
         nextClassLocation={nextClassLocation}
         userLocation={userLocation}
