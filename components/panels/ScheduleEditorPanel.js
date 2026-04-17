@@ -15,7 +15,15 @@ import {
 import { InfoBanner, PrimaryButton } from '../ui/action-controls';
 import { EmptyState, HeroHeader, SectionTitle, SurfaceCard } from '../ui/app-surface';
 
-const BUILDINGS = ['ZACH', 'MSC', 'BLOC', 'HELD', 'ILCB', 'SBISA', 'ETB', 'HRBB', 'MPHY'];
+const BUILDINGS = [
+  'ACAD', 'ADMIN', 'AGCT', 'AGLS', 'AGSV', 'ANIL', 'ARCA', 'ARCB', 'ARCC', 'ASTO', 'BEUT',
+  'BLOC', 'BSBE', 'BSBW', 'CCG', 'CHAN', 'CHEM', 'CHEN', 'COMM', 'CUSH', 'CVLB', 'CYCL', 'DLEB',
+  'DLH', 'DUNN', 'EABA', 'EABB', 'EABC', 'ETB', 'GERB', 'GGB', 'GSC', 'HECC',
+  'HELD', 'HEND', 'HLB', 'HRBB', 'ILCB', 'ILSQ', 'ILSB', 'JCAIN', 'KRUE', 'KYLE', 'LAAH',
+  'LIBR', 'LTGP', 'MIST', 'MOSH', 'MPHY', 'MSC', 'MSL', 'PEAP', 'PETR', 'PLS', 'PRB', 'PRG',
+  'PRRC', 'RDER', 'REC', 'REED', 'RICH', 'SBSA', 'SCC', 'SEBHC', 'SSRC', 'SUP3', 'UCG', 'VRHC', 'WEB', 'WEHN', 'WFES',
+  'ZACH',
+];
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 export default function ScheduleEditorPanel({ style }) {

@@ -1,0 +1,9 @@
+const BUILDINGS = [
+  'ACAD', 'ADMIN', 'AGCT', 'AGLS', 'AGSV', 'ARCA', 'ARCB', 'ARCC', 'ASTO', 'BEUT',
+  'BLOC', 'CCG', 'CHAN', 'CHEM', 'CHEN', 'COMM', 'CUSH', 'CVLB', 'CYCL', 'DLEB',
+  'DLH', 'DUNN', 'EABA', 'EABB', 'EABC', 'ETB', 'GERB', 'GGB', 'GSC', 'HECC',
+  'HELD', 'HEND', 'HLB', 'HRBB', 'ILCB', 'ILSB', 'JCAIN', 'KRUE', 'KYLE', 'LAAH',
+  'LIBR', 'LTGP', 'MIST', 'MOSH', 'MPHY', 'MSC', 'PEAP', 'PETR', 'PRB', 'PRG',
+  'RDER', 'REED', 'RICH', 'SBSA', 'SCC', 'SEBHC', 'SUP3', 'UCG', 'WEB', 'WFES',
+  'ZACH',
+];

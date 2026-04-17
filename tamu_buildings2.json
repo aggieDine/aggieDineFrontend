@@ -1,0 +1,302 @@
+{
+  "ACAD": {
+    "latitude": 30.6157603,
+    "longitude": -96.3407883,
+    "name": "Academic Building"
+  },
+  "UCG": {
+    "latitude": 30.6120424,
+    "longitude": -96.3387018,
+    "name": "University Center Garage"
+  },
+  "ILSB": {
+    "latitude": 30.6143247,
+    "longitude": -96.3436107,
+    "name": "Interdisciplinary Life Sciences Building"
+  },
+  "PETR": {
+    "latitude": 30.6159695,
+    "longitude": -96.3385938,
+    "name": "Peterson Building"
+  },
+  "CCG": {
+    "latitude": 30.616472,
+    "longitude": -96.3377255,
+    "name": "Central Campus Garage"
+  },
+  "HECC": {
+    "latitude": 30.61687,
+    "longitude": -96.340434,
+    "name": "Harrington Education Center Classroom Building"
+  },
+  "HLB": {
+    "latitude": 30.616206,
+    "longitude": -96.3375069,
+    "name": "HEEP Laboratory Building"
+  },
+  "BLOC": {
+    "latitude": 30.6195195,
+    "longitude": -96.3421582,
+    "name": "Blocker Building"
+  },
+  "MPHY": {
+    "latitude": 30.6202828,
+    "longitude": -96.3424732,
+    "name": "Mitchell Physics Building"
+  },
+  "ADMIN": {
+    "latitude": 30.6186995,
+    "longitude": -96.33649,
+    "name": "Jack K. Williams Administration Building"
+  },
+  "RDER": {
+    "latitude": 30.6133131,
+    "longitude": -96.3399433,
+    "name": "Rudder Theatre Complex"
+  },
+  "SBSA": {
+    "latitude": 30.6171494,
+    "longitude": -96.3437983,
+    "name": "Sbisa Dining Hall"
+  },
+  "BEUT": {
+    "latitude": 30.6156191,
+    "longitude": -96.3427291,
+    "name": "A. P. Beutel Health Center"
+  },
+  "EABB": {
+    "latitude": 30.6155427,
+    "longitude": -96.3374424,
+    "name": "Engineering Activities Building B"
+  },
+  "EABC": {
+    "latitude": 30.6152547,
+    "longitude": -96.3378653,
+    "name": "Engineering Activities Building C"
+  },
+  "EABA": {
+    "latitude": 30.6158319,
+    "longitude": -96.3370056,
+    "name": "Engineering Activities Building A"
+  },
+  "CHEN": {
+    "latitude": 30.6208463,
+    "longitude": -96.3418102,
+    "name": "Jack E. Brown Chemical Engineering Building"
+  },
+  "REED": {
+    "latitude": 30.6056818,
+    "longitude": -96.3461362,
+    "name": "Reed Arena"
+  },
+  "ARCC": {
+    "latitude": 30.6193566,
+    "longitude": -96.3380049,
+    "name": "Langford Architecture Center Building C"
+  },
+  "CHAN": {
+    "latitude": 30.6184787,
+    "longitude": -96.3395765,
+    "name": "Chemistry"
+  },
+  "SUP3": {
+    "latitude": 30.6137672,
+    "longitude": -96.3390296,
+    "name": "Supplemental Utility Plant 3"
+  },
+  "ARCA": {
+    "latitude": 30.6188071,
+    "longitude": -96.337641,
+    "name": "Langford Architecture Center Building A"
+  },
+  "HEND": {
+    "latitude": 30.6147874,
+    "longitude": -96.3444634,
+    "name": "Henderson Hall"
+  },
+  "ARCB": {
+    "latitude": 30.6192321,
+    "longitude": -96.3383074,
+    "name": "Langford Architecture Center Building B"
+  },
+  "COMM": {
+    "latitude": 30.6153804,
+    "longitude": -96.3360119,
+    "name": "Commons"
+  },
+  "CHEM": {
+    "latitude": 30.6179136,
+    "longitude": -96.340153,
+    "name": "Chemistry"
+  },
+  "CYCL": {
+    "latitude": 30.6203242,
+    "longitude": -96.3413709,
+    "name": "Cyclotron Building"
+  },
+  "ETB": {
+    "latitude": 30.6227007,
+    "longitude": -96.3392285,
+    "name": "Emerging Technologies Building"
+  },
+  "LIBR": {
+    "latitude": 30.6163108,
+    "longitude": -96.338365,
+    "name": "Sterling C. Evans Library Annex"
+  },
+  "CUSH": {
+    "latitude": 30.6163291,
+    "longitude": -96.3399555,
+    "name": "Cushing Memorial Library"
+  },
+  "LAAH": {
+    "latitude": 30.6177053,
+    "longitude": -96.3379562,
+    "name": "Liberal Arts and Arts & Humanities Building"
+  },
+  "RICH": {
+    "latitude": 30.6194864,
+    "longitude": -96.339364,
+    "name": "Joe C. Richardson Petroleum Engineering Building"
+  },
+  "DLH": {
+    "latitude": 30.6065971,
+    "longitude": -96.357656,
+    "name": "Donald L. Houston Building"
+  },
+  "JCAIN": {
+    "latitude": 30.6197935,
+    "longitude": -96.3410162,
+    "name": "James J. Cain '51 Building"
+  },
+  "SCC": {
+    "latitude": 30.6159301,
+    "longitude": -96.3380078,
+    "name": "Student Computing Center"
+  },
+  "MIST": {
+    "latitude": 30.6200397,
+    "longitude": -96.3429138,
+    "name": "Mitchell Institute"
+  },
+  "PEAP": {
+    "latitude": 30.6044974,
+    "longitude": -96.34942,
+    "name": "Physical Education Activities Program Building"
+  },
+  "GSC": {
+    "latitude": 30.6221632,
+    "longitude": -96.3574563,
+    "name": "General Services Complex"
+  },
+  "SEBHC": {
+    "latitude": 30.620795,
+    "longitude": -96.3584213,
+    "name": "Schubot Exotic Bird Health Center"
+  },
+  "GGB": {
+    "latitude": 30.6014829,
+    "longitude": -96.3533915,
+    "name": "Gilchrist Building"
+  },
+  "AGSV": {
+    "latitude": 30.6060748,
+    "longitude": -96.3511491,
+    "name": "AgriLife Services Building"
+  },
+  "WFES": {
+    "latitude": 30.6064353,
+    "longitude": -96.35061,
+    "name": "Wildlife Fisheries & Ecological Sciences Building"
+  },
+  "ZACH": {
+    "latitude": 30.6213884,
+    "longitude": -96.340445,
+    "name": "Zachry Engineering Education Complex"
+  },
+  "GERB": {
+    "latitude": 30.6021487,
+    "longitude": -96.3570635,
+    "name": "Frederick E. Giesecke Engineering Research Building"
+  },
+  "LTGP": {
+    "latitude": 30.6071798,
+    "longitude": -96.3517205,
+    "name": "Leach Teaching Gardens Pavilion"
+  },
+  "DLEB": {
+    "latitude": 30.6202069,
+    "longitude": -96.339895,
+    "name": "Dwight Look Engineering Building"
+  },
+  "CVLB": {
+    "latitude": 30.6200007,
+    "longitude": -96.3395031,
+    "name": "CVE Lab Building"
+  },
+  "WEB": {
+    "latitude": 30.6207979,
+    "longitude": -96.3388836,
+    "name": "Wisenbaker Engineering Building"
+  },
+  "PRG": {
+    "latitude": 30.623517,
+    "longitude": -96.338049,
+    "name": "Polo Road Garage"
+  },
+  "PRB": {
+    "latitude": 30.6230328,
+    "longitude": -96.338287,
+    "name": "Polo Road Building"
+  },
+  "HRBB": {
+    "latitude": 30.619009,
+    "longitude": -96.338843,
+    "name": "Harvey R. Bright Building"
+  },
+  "AGCT": {
+    "latitude": 30.606087,
+    "longitude": -96.3501176,
+    "name": "The AgriLife Center"
+  },
+  "AGLS": {
+    "latitude": 30.6055043,
+    "longitude": -96.3509788,
+    "name": "Agriculture and Life Sciences Building"
+  },
+  "ILCB": {
+    "latitude": 30.6119673,
+    "longitude": -96.3442007,
+    "name": "Innovative Learning Classroom Building"
+  },
+  "DUNN": {
+    "latitude": 30.6150706,
+    "longitude": -96.3368344,
+    "name": "Dunn Residence Hall"
+  },
+  "ASTO": {
+    "latitude": 30.6146659,
+    "longitude": -96.3363262,
+    "name": "Aston Residence Hall"
+  },
+  "MOSH": {
+    "latitude": 30.6154436,
+    "longitude": -96.3351896,
+    "name": "Mosher Residence Hall"
+  },
+  "MSC": {
+    "latitude": 30.6122837,
+    "longitude": -96.3414785,
+    "name": "Memorial Student Center"
+  },
+  "KRUE": {
+    "latitude": 30.6159291,
+    "longitude": -96.3355409,
+    "name": "Krueger Residence Hall"
+  },
+  "KYLE": {
+    "latitude": 30.6099046,
+    "longitude": -96.3403893,
+    "name": "Kyle Field"
+  }
+}
