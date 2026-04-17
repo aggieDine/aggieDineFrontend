@@ -76,12 +76,62 @@ function formatDistanceMiles(distanceKm) {
   if (distanceKm == null) return null;
 
   const miles = distanceKm * 0.621371;
-  if (miles < 0.15) return 'Less than 0.1 mi away';
-  return `${miles.toFixed(1)} mi away`;
+  const feet = miles * 5280;
+  if (feet < 500) return `${Math.round(feet / 10) * 10} ft`;
+  if (miles < 0.15) return '0.1 mi';
+  return `${miles.toFixed(1)} mi`;
+}
+
+function getBearingDirection(lat1, lon1, lat2, lon2) {
+  const dLon = (lon2 - lon1) * (Math.PI / 180);
+  const y = Math.sin(dLon) * Math.cos(lat2 * (Math.PI / 180));
+  const x =
+    Math.cos(lat1 * (Math.PI / 180)) * Math.sin(lat2 * (Math.PI / 180)) -
+    Math.sin(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) * Math.cos(dLon);
+  const bearing = ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360;
+  const dirs = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+  return dirs[Math.round(bearing / 45) % 8];
+}
+
+const DIRECTION_ARROWS = {
+  N: '↑', NE: '↗', E: '→', SE: '↘', S: '↓', SW: '↙', W: '←', NW: '↖',
+};
+
+function getAbsoluteBearing(lat1, lon1, lat2, lon2) {
+  const dLon = (lon2 - lon1) * (Math.PI / 180);
+  const y = Math.sin(dLon) * Math.cos(lat2 * (Math.PI / 180));
+  const x =
+    Math.cos(lat1 * (Math.PI / 180)) * Math.sin(lat2 * (Math.PI / 180)) -
+    Math.sin(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) * Math.cos(dLon);
+  return ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360;
 }
 
 function getStatusLabel(hall) {
   return hall?.status?.isOpen ? 'Open Now' : 'Closed';
+}
+
+function getClosingInfo(hall) {
+  if (!hall?.status?.isOpen) return null;
+  if (!hall.hours?.length) return null;
+
+  const now = new Date();
+  const currentMinutes = now.getHours() * 60 + now.getMinutes();
+
+  for (const period of hall.hours) {
+    const close = period.close ?? period.end;
+    if (!close) continue;
+    const [h, m] = close.split(':').map(Number);
+    const closeMinutes = h * 60 + (m || 0);
+    if (closeMinutes > currentMinutes) {
+      const diff = closeMinutes - currentMinutes;
+      if (diff > 180) return `Closes ${close}`;
+      const hrs = Math.floor(diff / 60);
+      const mins = diff % 60;
+      if (hrs > 0) return `Closes in ${hrs}h ${mins}m`;
+      return `Closes in ${mins}m`;
+    }
+  }
+  return null;
 }
 
 function formatInviteStatus(status) {
@@ -108,13 +158,11 @@ function getExploreCopy({ selectedHall, suggestion }) {
     return {
       eyebrow: 'Selected Place',
       title: selectedHall.name,
-      body: 'Viewing details for this dining spot.',
     };
   }
   return {
-    eyebrow: 'Best Spot Right Now',
-    title: suggestion?.name ?? 'No open spots found',
-    body: 'Using your current location as the anchor.',
+    eyebrow: 'Explore',
+    title: '',
   };
 }
 
@@ -160,6 +208,44 @@ export default function MapFeed({
   const [activePageIndex, setActivePageIndex] = useState(0);
   const [groupInvites, setGroupInvites] = useState([]);
   const [isMyDayPlacesExpanded, setIsMyDayPlacesExpanded] = useState(false);
+  const [deviceHeading, setDeviceHeading] = useState(null);
+  const [compassPermission, setCompassPermission] = useState('unknown');
+
+  const requestCompass = useCallback(() => {
+    if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+      DeviceOrientationEvent.requestPermission()
+        .then((state) => {
+          setCompassPermission(state);
+          if (state === 'granted') startCompassListener();
+        })
+        .catch(() => setCompassPermission('denied'));
+    } else if (typeof DeviceOrientationEvent !== 'undefined') {
+      setCompassPermission('granted');
+      startCompassListener();
+    } else {
+      setCompassPermission('unsupported');
+    }
+  }, []);
+
+  const startCompassListener = useCallback(() => {
+    const handler = (e) => {
+      if (e.webkitCompassHeading != null) {
+        setDeviceHeading(e.webkitCompassHeading);
+      } else if (e.alpha != null) {
+        setDeviceHeading((360 - e.alpha) % 360);
+      }
+    };
+    window.addEventListener('deviceorientation', handler, true);
+    return () => window.removeEventListener('deviceorientation', handler, true);
+  }, []);
+
+  useEffect(() => {
+    if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission !== 'function') {
+      setCompassPermission('granted');
+      const cleanup = startCompassListener();
+      return cleanup;
+    }
+  }, [startCompassListener]);
 
   const detents = useMemo(() => {
     const collapsedVisible = 17;
@@ -354,25 +440,13 @@ export default function MapFeed({
 
   useEffect(() => {
     const measure = () => {
-      if (!sheetRef.current) return;
-      setSheetHeight(sheetRef.current.offsetHeight);
+      setSheetHeight(window.innerHeight - 72);
     };
 
     measure();
-
-    const observer =
-      typeof ResizeObserver !== 'undefined' && sheetRef.current
-        ? new ResizeObserver(() => measure())
-        : null;
-
-    if (observer && sheetRef.current) {
-      observer.observe(sheetRef.current);
-    }
-
     window.addEventListener('resize', measure);
 
     return () => {
-      observer?.disconnect();
       window.removeEventListener('resize', measure);
     };
   }, []);
@@ -609,6 +683,12 @@ export default function MapFeed({
 
   return (
     <div style={styles.frame}>
+      <style>{`
+        @keyframes statusPulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.4; }
+        }
+      `}</style>
       <MapView
         ref={mapRef}
         initialViewState={{
@@ -971,37 +1051,59 @@ export default function MapFeed({
             {/* Page 0: Explore (Near Me) */}
             <div style={styles.pagerPage}>
               <div style={styles.sheetContent}>
-                <div style={styles.heroBlock}>
-                  <p style={styles.eyebrow}>{exploreCopy.eyebrow}</p>
-                  <h2 style={styles.title}>{exploreCopy.title}</h2>
-                  <p style={styles.body}>{exploreCopy.body}</p>
-                </div>
-
-                {activeHall ? (
-                  <div style={styles.primaryCard}>
-                    <div style={styles.primaryHeader}>
-                      <div style={styles.primaryTitleWrap}>
-                        <h3 style={styles.primaryTitle}>{activeHall.name}</h3>
-                        <p style={styles.primaryMeta}>
-                          {activeHall.category ?? 'Dining Spot'} | {getStatusLabel(activeHall)}
-                        </p>
+                {activeHall ? (() => {
+                  const hasCoords = userLocation && activeHall.coordinates;
+                  const absBearing = hasCoords
+                    ? getAbsoluteBearing(
+                        userLocation.latitude, userLocation.longitude,
+                        activeHall.coordinates.latitude, activeHall.coordinates.longitude
+                      )
+                    : null;
+                  const useCompass = deviceHeading != null && absBearing != null;
+                  const rotationDeg = useCompass ? (absBearing - deviceHeading + 360) % 360 : null;
+                  const fallbackDir = hasCoords
+                    ? getBearingDirection(
+                        userLocation.latitude, userLocation.longitude,
+                        activeHall.coordinates.latitude, activeHall.coordinates.longitude
+                      )
+                    : null;
+                  return (
+                    <div style={styles.primaryCard}>
+                      <div style={{ ...styles.primaryHeader, alignItems: 'center' }}>
+                        <div style={styles.primaryTitleWrap}>
+                          <h3 style={styles.primaryTitle}>{activeHall.name}</h3>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: 0 }}>
+                            <p style={{ ...styles.primaryMeta, margin: 0 }}>
+                              {activeHall.status?.isOpen ? (
+                                <>
+                                  <span style={{ color: '#22A45D', fontWeight: 700, animation: 'statusPulse 2.5s ease-in-out infinite' }}>Open</span>
+                                  <span> · Closes in 2h 15m</span>
+                                </>
+                              ) : (
+                                <span style={{ color: '#D64545', fontWeight: 700 }}>Closed</span>
+                              )}
+                            </p>
+                            <span style={styles.recommendedBadge}>Recommended</span>
+                          </div>
+                        </div>
+                        {hasCoords && activeDistance ? (
+                          <div
+                            style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flexShrink: 0, cursor: compassPermission === 'unknown' ? 'pointer' : 'default' }}
+                            onClick={compassPermission === 'unknown' ? requestCompass : undefined}>
+                            {useCompass ? (
+                              <span style={{ fontSize: 24, lineHeight: 1, color: '#500000', transition: 'transform 150ms ease-out', transform: `rotate(${rotationDeg}deg)` }}>↑</span>
+                            ) : compassPermission === 'unknown' ? (
+                              <span style={{ fontSize: 13, color: '#500000', fontWeight: 600 }}>🧭</span>
+                            ) : (
+                              <span style={{ fontSize: 22, lineHeight: 1, color: '#500000' }}>{DIRECTION_ARROWS[fallbackDir]}</span>
+                            )}
+                            <span style={{ fontSize: 11, fontWeight: 600, color: '#564B46', marginTop: 2 }}>{activeDistance}</span>
+                          </div>
+                        ) : null}
                       </div>
-                      <span style={styles.recommendedBadge}>Recommended</span>
                     </div>
-
-                    {activeDistance ? (
-                      <div style={styles.infoRow}>
-                        <span style={styles.infoIcon}>Walk</span>
-                        <span style={styles.infoText}>{activeDistance}</span>
-                      </div>
-                    ) : null}
-
-                    <div style={styles.infoRow}>
-                      <span style={styles.infoIcon}>Near</span>
-                      <span style={styles.infoText}>Anchored to your live location</span>
-                    </div>
-                  </div>
-                ) : null}
+                  );
+                })() : null}
 
                 <div style={styles.sectionHeader}>
                   <h3 style={styles.sectionTitle}>Dining Places</h3>
@@ -1010,8 +1112,6 @@ export default function MapFeed({
 
                 <div style={styles.placeList}>
                   {places.map((hall) => {
-                    const selected = hall.id === selectedHall?.id;
-                    const recommended = hall.id === suggestion?.id;
                     const distance =
                       userLocation && hall.coordinates
                         ? formatDistanceMiles(
@@ -1023,41 +1123,56 @@ export default function MapFeed({
                             )
                           )
                         : null;
+                    const hallHasCoords = userLocation && hall.coordinates;
+                    const hallBearing = hallHasCoords
+                      ? getAbsoluteBearing(
+                          userLocation.latitude, userLocation.longitude,
+                          hall.coordinates.latitude, hall.coordinates.longitude
+                        )
+                      : null;
+                    const hallUseCompass = deviceHeading != null && hallBearing != null;
+                    const hallRotation = hallUseCompass ? (hallBearing - deviceHeading + 360) % 360 : null;
+                    const hallFallbackDir = hallHasCoords
+                      ? getBearingDirection(
+                          userLocation.latitude, userLocation.longitude,
+                          hall.coordinates.latitude, hall.coordinates.longitude
+                        )
+                      : null;
 
                     return (
-                      <button
+                      <div
                         key={hall.id}
-                        style={{
-                          ...styles.placeRow,
-                          ...(selected ? styles.placeRowSelected : null),
-                        }}
+                        style={styles.primaryCard}
                         onClick={() => {
                           router.push(`/restaurant/${hall.id}`);
                           focusMapOnHall(hall);
                         }}>
-                        <div style={styles.placeRowMain}>
-                          <div style={styles.placeIconWrap}>
-                            <span
-                              style={{
-                                ...styles.placeIcon,
-                                color: recommended ? '#2F6FED' : hall.status?.isOpen ? '#1B8B4B' : '#B44A4A',
-                              }}>
-                              Eat
-                            </span>
+                        <div style={{ ...styles.primaryHeader, alignItems: 'center', cursor: 'pointer' }}>
+                          <div style={styles.primaryTitleWrap}>
+                            <h3 style={styles.primaryTitle}>{hall.name}</h3>
+                            <p style={{ ...styles.primaryMeta, margin: 0 }}>
+                              {hall.status?.isOpen ? (
+                                <>
+                                  <span style={{ color: '#22A45D', fontWeight: 700, animation: 'statusPulse 2.5s ease-in-out infinite' }}>Open</span>
+                                  <span> · Closes in 2h 15m</span>
+                                </>
+                              ) : (
+                                <span style={{ color: '#D64545', fontWeight: 700 }}>Closed</span>
+                              )}
+                            </p>
                           </div>
-                          <div style={styles.placeCopy}>
-                            <div style={styles.placeTitleRow}>
-                              <span style={styles.placeName}>{hall.name}</span>
-                              {recommended ? <span style={styles.inlineBadge}>For you</span> : null}
+                          {hallHasCoords && distance ? (
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flexShrink: 0 }}>
+                              {hallUseCompass ? (
+                                <span style={{ fontSize: 24, lineHeight: 1, color: '#500000', transition: 'transform 150ms ease-out', transform: `rotate(${hallRotation}deg)` }}>↑</span>
+                              ) : (
+                                <span style={{ fontSize: 22, lineHeight: 1, color: '#500000' }}>{DIRECTION_ARROWS[hallFallbackDir]}</span>
+                              )}
+                              <span style={{ fontSize: 11, fontWeight: 600, color: '#564B46', marginTop: 2 }}>{distance}</span>
                             </div>
-                            <span style={styles.placeMeta}>
-                              {hall.category ?? 'Dining Spot'} | {getStatusLabel(hall)}
-                              {distance ? ` | ${distance}` : ''}
-                            </span>
-                          </div>
+                          ) : null}
                         </div>
-                        <span style={styles.placeChevron}>{'>'}</span>
-                      </button>
+                      </div>
                     );
                   })}
                 </div>
@@ -1218,6 +1333,7 @@ export default function MapFeed({
                   }
                 }}>
                 {TAB_ICONS[tab.key](selected ? '#500000' : 'rgba(0,0,0,0.25)')}
+                <span style={{ fontSize: 10, fontWeight: 600, color: selected ? '#500000' : 'rgba(0,0,0,0.3)', marginTop: 2 }}>{tab.label}</span>
               </button>
             );
           })}
@@ -1355,13 +1471,14 @@ const styles = {
     WebkitBackdropFilter: 'blur(28px)',
     boxShadow: '0 4px 24px rgba(80,0,0,0.2), 0 1px 6px rgba(80,0,0,0.1)',
     overflow: 'hidden',
+    fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', sans-serif",
   },
   contentArea: {
     overflow: 'hidden',
     willChange: 'height',
   },
   contentInner: {
-    height: 'calc(100dvh - 72px)',
+    height: '100%',
     display: 'flex',
     flexDirection: 'column',
   },
@@ -1381,6 +1498,15 @@ const styles = {
     borderRadius: 999,
     backgroundColor: 'rgba(0,0,0,0.18)',
   },
+  pageLabel: {
+    margin: 0,
+    fontSize: 11,
+    fontWeight: 600,
+    color: '#8A7B74',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    padding: '0 14px',
+  },
 
   /* ── Tab Bar (persistent bottom of the tray) ── */
   tabBar: {
@@ -1393,16 +1519,17 @@ const styles = {
   },
   tabButton: {
     flex: 1,
-    height: 42,
     borderRadius: 13,
     border: 'none',
     backgroundColor: 'transparent',
     cursor: 'pointer',
     display: 'flex',
+    flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
     transition: 'all 140ms ease',
-    padding: 0,
+    padding: '6px 0 4px',
+    gap: 0,
   },
   tabButtonActive: {},
   tabLabel: {
@@ -1464,7 +1591,7 @@ const styles = {
   },
   eyebrow: {
     margin: 0,
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: 600,
     letterSpacing: 0.5,
     textTransform: 'uppercase',
@@ -1472,7 +1599,7 @@ const styles = {
   },
   title: {
     margin: 0,
-    fontSize: 20,
+    fontSize: 24,
     lineHeight: 1.15,
     fontWeight: 700,
     color: '#1a1a1a',
@@ -1480,8 +1607,8 @@ const styles = {
   },
   body: {
     margin: 0,
-    fontSize: 12,
-    lineHeight: 1.3,
+    fontSize: 14,
+    lineHeight: 1.35,
     color: '#6E625D',
   },
 
@@ -1494,6 +1621,8 @@ const styles = {
     display: 'flex',
     flexDirection: 'column',
     gap: 8,
+    minHeight: 68,
+    justifyContent: 'center',
   },
   focusedPrimaryCard: {
     backgroundColor: '#FFFFFF',
@@ -1510,8 +1639,8 @@ const styles = {
     color: '#FFFFFF',
     border: 'none',
     borderRadius: 999,
-    padding: '9px 16px',
-    fontSize: 13,
+    padding: '11px 18px',
+    fontSize: 15,
     fontWeight: '600',
     cursor: 'pointer',
     textAlign: 'center',
@@ -1647,22 +1776,22 @@ const styles = {
   },
   primaryTitle: {
     margin: 0,
-    fontSize: 15,
-    fontWeight: 700,
+    fontSize: 17,
+    fontWeight: 500,
     color: '#1a1a1a',
     letterSpacing: -0.2,
   },
   primaryMeta: {
     margin: 0,
-    fontSize: 11,
+    fontSize: 13,
     color: '#7B6F69',
   },
   recommendedBadge: {
     backgroundColor: '#E8F0FF',
     color: '#2F6FED',
     borderRadius: 999,
-    padding: '2px 7px',
-    fontSize: 10,
+    padding: '3px 8px',
+    fontSize: 12,
     fontWeight: 600,
     whiteSpace: 'nowrap',
   },
@@ -1687,12 +1816,12 @@ const styles = {
     color: '#564B46',
   },
   infoIcon: {
-    fontSize: 11,
+    fontSize: 13,
     fontWeight: 600,
     color: '#8A7B74',
   },
   infoText: {
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: 500,
     color: '#564B46',
   },
@@ -1703,14 +1832,14 @@ const styles = {
   },
   sectionTitle: {
     margin: 0,
-    fontSize: 14,
+    fontSize: 17,
     fontWeight: 700,
     color: '#1a1a1a',
     letterSpacing: -0.2,
   },
   sectionCaption: {
     margin: 0,
-    fontSize: 11,
+    fontSize: 13,
     color: '#7B706B',
   },
 
@@ -1755,7 +1884,7 @@ const styles = {
     flexShrink: 0,
   },
   placeIcon: {
-    fontSize: 11,
+    fontSize: 13,
     fontWeight: 700,
   },
   placeCopy: {
@@ -1772,7 +1901,7 @@ const styles = {
     flexWrap: 'wrap',
   },
   placeName: {
-    fontSize: 13,
+    fontSize: 15,
     fontWeight: 600,
     color: '#1a1a1a',
     letterSpacing: -0.1,
@@ -1781,21 +1910,21 @@ const styles = {
     backgroundColor: 'rgba(80,0,0,0.07)',
     color: '#7A4333',
     borderRadius: 999,
-    padding: '1px 5px',
-    fontSize: 9,
+    padding: '2px 6px',
+    fontSize: 11,
     fontWeight: 600,
   },
   clusterInlineBadge: {
     backgroundColor: '#FFF3E3',
     color: '#A45B1C',
     borderRadius: 999,
-    padding: '1px 5px',
-    fontSize: 9,
+    padding: '2px 6px',
+    fontSize: 11,
     fontWeight: 600,
   },
   placeMeta: {
-    fontSize: 11,
-    lineHeight: 1.25,
+    fontSize: 13,
+    lineHeight: 1.3,
     color: '#7A6E69',
   },
   placeChevron: {
