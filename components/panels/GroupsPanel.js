@@ -1,21 +1,11 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { useEffect, useState } from 'react';
-import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useEffect, useMemo, useState } from 'react';
+import { Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { InfoBanner, PrimaryButton, SecondaryButton } from '../ui/action-controls';
 import { EmptyState, HeroHeader, SectionTitle, SurfaceCard } from '../ui/app-surface';
-
-const DINING_SPOTS = [
-  'Sbisa Dining Hall',
-  'The Commons',
-  "Rev's Grille",
-  'Panda Express',
-  'Chick-fil-A',
-  'Starbucks (MSC)',
-  'Duncan Dining Hall',
-  'Hullabaloo Cafe',
-];
+import { useDiningData } from '../../data/DiningDataContext';
 
 const STORAGE_KEY = 'groupInvites';
 // Date limit for the event creation 
@@ -25,6 +15,12 @@ const daysUntilNextSaturday = 13 - TODAY.getDay();
 END_OF_NEXT_WEEK.setDate(TODAY.getDate() + daysUntilNextSaturday);
 
 export default function GroupsPanel({ style }) {
+  const { diningHalls } = useDiningData();
+  const diningSpots = useMemo(
+    () => diningHalls.map((h) => h.name).sort((a, b) => a.localeCompare(b)),
+    [diningHalls]
+  );
+
   const [invites, setInvites] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [restaurant, setRestaurant] = useState('');
@@ -153,8 +149,8 @@ export default function GroupsPanel({ style }) {
   };
 
   const filteredRestaurants = restaurant.trim()
-    ? DINING_SPOTS.filter((item) => item.toLowerCase().includes(restaurant.toLowerCase()))
-    : DINING_SPOTS;
+    ? diningSpots.filter((item) => item.toLowerCase().includes(restaurant.toLowerCase()))
+    : diningSpots;
 
   return (
     <View style={[styles.panel, style]}>
@@ -197,17 +193,19 @@ export default function GroupsPanel({ style }) {
 
             {showRestaurantPicker && filteredRestaurants.length > 0 ? (
               <View style={styles.dropdown}>
-                {filteredRestaurants.map((item) => (
-                  <Pressable
-                    key={item}
-                    style={styles.dropdownItem}
-                    onPress={() => {
-                      setRestaurant(item);
-                      setShowRestaurantPicker(false);
-                    }}>
-                    <Text style={styles.dropdownText}>{item}</Text>
-                  </Pressable>
-                ))}
+                <ScrollView nestedScrollEnabled keyboardShouldPersistTaps="handled">
+                  {filteredRestaurants.map((item) => (
+                    <Pressable
+                      key={item}
+                      style={styles.dropdownItem}
+                      onPress={() => {
+                        setRestaurant(item);
+                        setShowRestaurantPicker(false);
+                      }}>
+                      <Text style={styles.dropdownText}>{item}</Text>
+                    </Pressable>
+                  ))}
+                </ScrollView>
               </View>
             ) : null}
           </View>
