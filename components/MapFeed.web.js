@@ -211,6 +211,7 @@ export default function MapFeed({
   const sheetRef = useRef(null);
   const dragStateRef = useRef(null);
   const pagerRef = useRef(null);
+  const scrollLockRef = useRef(0);
 
   const [selectedHall, setSelectedHall] = useState(null);
   const [selectedCluster, setSelectedCluster] = useState(null);
@@ -588,12 +589,34 @@ export default function MapFeed({
         'medium'
       );
 
+      // Defensively block onScroll state mutations during the layout restoration
+      scrollLockRef.current = Date.now() + 400;
+
       setIsDragging(false);
       dragStateRef.current = null;
       snapTo(nearest);
+
+      // Forcefully overwrite native geometric drift
+      setTimeout(() => {
+        if (pagerRef.current) {
+          pagerRef.current.scrollTo({ left: pagerRef.current.offsetWidth * activePageIndex, behavior: 'auto' });
+        }
+      }, 0);
     },
-    [detents, snapTo]
+    [detents, snapTo, activePageIndex]
   );
+
+  useEffect(() => {
+    if (pagerRef.current) {
+      if (isDragging) {
+        pagerRef.current.style.overflowX = 'hidden';
+        pagerRef.current.style.scrollSnapType = 'none';
+      } else {
+        pagerRef.current.style.overflowX = 'auto';
+        pagerRef.current.style.scrollSnapType = 'x mandatory';
+      }
+    }
+  }, [isDragging]);
 
   useEffect(() => {
     const handleMouseMove = (event) => {
@@ -1097,9 +1120,11 @@ export default function MapFeed({
             ref={pagerRef}
             style={styles.pagerScroll}
             onScroll={(e) => {
+              if (isDragging || Date.now() < scrollLockRef.current) return;
               const el = e.currentTarget;
+              if (!el.offsetWidth || el.style.scrollSnapType === 'none') return;
               const page = Math.round(el.scrollLeft / el.offsetWidth);
-              if (page !== activePageIndex) {
+              if (page !== activePageIndex && !Number.isNaN(page)) {
                 setActivePageIndex(page);
                 if (page === EXPLORE_PAGE_INDEX) onRecommendationModeChange?.('location');
                 else if (page === MY_DAY_PAGE_INDEX) onRecommendationModeChange?.('schedule');
@@ -1387,13 +1412,28 @@ export default function MapFeed({
                   setSelectedHall(null);
                   setSelectedCluster(null);
                   setActivePageIndex(index);
-                  setSheetOffset(detents.expanded);
                   if (index === EXPLORE_PAGE_INDEX) onRecommendationModeChange?.('location');
                   else if (index === MY_DAY_PAGE_INDEX) onRecommendationModeChange?.('schedule');
+
+                  // Lock horizontal snap and events while the sheet vertically expands
                   if (pagerRef.current) {
+                    pagerRef.current.style.scrollSnapType = 'none';
+                    pagerRef.current.style.overflowX = 'hidden';
                     const pageWidth = pagerRef.current.offsetWidth;
-                    pagerRef.current.scrollTo({ left: pageWidth * index, behavior: 'smooth' });
+                    
+                    pagerRef.current.scrollTo({ left: pageWidth * index, behavior: 'auto' });
+
+                    setTimeout(() => {
+                      if (pagerRef.current) {
+                        pagerRef.current.style.scrollSnapType = 'x mandatory';
+                        pagerRef.current.style.overflowX = 'auto';
+                        // Re-sync if browser was lagging
+                        pagerRef.current.scrollTo({ left: pagerRef.current.offsetWidth * index, behavior: 'auto' });
+                      }
+                    }, 250);
                   }
+                  
+                  setSheetOffset(detents.expanded);
                 }}>
                 {TAB_ICONS[tab.key](selected ? '#500000' : 'rgba(0,0,0,0.25)')}
                 <span style={{ fontSize: 10, fontWeight: 600, color: selected ? '#500000' : 'rgba(0,0,0,0.3)', marginTop: 2 }}>{tab.label}</span>
