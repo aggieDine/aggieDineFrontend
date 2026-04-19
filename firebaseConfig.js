@@ -1,37 +1,21 @@
+// import { initializeApp } from 'firebase/app';
+// import { getMessaging, getToken, onMessage } from 'firebase/messaging';
 
-import { initializeApp } from "firebase/app";
-import { getFirestore } from "firebase/firestore";
-// 1. Import the specific Auth functions
-import { getReactNativePersistence, initializeAuth } from 'firebase/auth';
-// 2. Import the storage library
-import ReactNativeAsyncStorage from '@react-native-async-storage/async-storage';
+// // Firebase project configuration
+// // Get these from Firebase Console → Project Settings → General
+// const firebaseConfig = {
+//   apiKey: "AIzaSy...",  // Your API key
+//   authDomain: "your-project.firebaseapp.com",
+//   projectId: "your-project-id",
+//   storageBucket: "your-project.appspot.com",
+//   messagingSenderId: "123456789",
+//   appId: "1:123456789:web:abcdef",
+// };
 
-const firebaseConfig = {
-  // --- PASTE YOUR KEYS HERE ---
-  apiKey: "AIzaSyCQXWztaNebkqytjlMJNJHwTIu47igzcxg",
+// // Initialize Firebase
+// const app = initializeApp(firebaseConfig);
 
-  authDomain: "aggiedine.firebaseapp.com",
+// // Initialize Firebase Cloud Messaging
+// const messaging = getMessaging(app);
 
-  projectId: "aggiedine",
-
-  storageBucket: "aggiedine.firebasestorage.app",
-
-  messagingSenderId: "482275946132",
-
-  appId: "1:482275946132:web:0fe2342c27537f4be50e81",
-
-  measurementId: "G-DXR2Q2SM9C"
-};
-
-// 3. Initialize App
-const app = initializeApp(firebaseConfig);
-
-// 4. FORCE Firebase to use React Native storage (Fixes the Error)
-const auth = initializeAuth(app, {
-  persistence: getReactNativePersistence(ReactNativeAsyncStorage)
-});
-
-const db = getFirestore(app);
-
-export { auth, db };
-
+// export { messaging, getToken, onMessage };

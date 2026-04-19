@@ -5,15 +5,71 @@ import { useEffect, useState } from 'react';
 import { View, ActivityIndicator, Platform } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 
+// ==========================================
+// 🆕 NEW IMPORTS FOR FCM & EVENTS
+// ==========================================
+import { EventsProvider, useEvents } from '../data/EventsContext'; 
+import { setupFCMListeners, registerDeviceToken } from '../services/fcmService'; 
+
 WebBrowser.maybeCompleteAuthSession();
 
+const API_URL = 'https://nh19d71sp8.execute-api.us-east-2.amazonaws.com';
+
 function RootLayoutNav() {
-  const { user, isLoading, signInWithToken } = useAuth();
+  const { user, idToken, isLoading, signInWithToken } = useAuth();
   const segments = useSegments();
   const router = useRouter();
   const [handlingCode, setHandlingCode] = useState(false);
+  const { addEvent, updateEvent, removeEvent } = useEvents();
 
-  // On web: intercept auth code from URL before the auth guard redirects away
+  // ==========================================
+  // 🆕 NEW: FCM INITIALIZATION & LISTENERS
+  // ==========================================
+  useEffect(() => {
+    let unsubscribeFCM: (() => void) | undefined;
+
+    const initializeFCM = async () => {
+      // 1. Only register if user is logged in
+      if (user && idToken) {
+        console.log('🔐 User authenticated, registering FCM token...');
+        
+        
+        await registerDeviceToken(idToken, API_URL);
+
+        // 2. Setup the foreground listeners
+        unsubscribeFCM = setupFCMListeners((action: any, eventData: any) => {
+          console.log(`📨 Foreground FCM Message Received: ${action}`, eventData);
+
+          // Since you are using "Fetch on Focus", you just need this to catch
+          // real-time updates while the user is actively looking at the screen.
+          // ✅ 2. Actually update the UI when the message arrives!
+          if (action === 'event_created') {
+             addEvent(eventData); 
+          } else if (action === 'event_updated') {
+             updateEvent(eventData);
+          } else if (action === 'event_deleted') {
+             removeEvent(eventData.event_id);
+          }
+        });
+      }
+    };
+
+    if (!isLoading && !handlingCode) {
+      initializeFCM();
+    }
+
+    // Cleanup ONLY the listener on unmount
+    return () => {
+      if (unsubscribeFCM) {
+        unsubscribeFCM();
+      }
+    };
+  }, [user, idToken, isLoading, handlingCode]);
+
+
+  // ==========================================
+  // ✅ EXISTING: WEB AUTH INTERCEPTION
+  // ==========================================
   useEffect(() => {
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
@@ -50,6 +106,9 @@ function RootLayoutNav() {
     }
   }, []);
 
+  // ==========================================
+  // ✅ EXISTING: ROUTING GUARDS
+  // ==========================================
   useEffect(() => {
     if (isLoading || handlingCode) return;
 
@@ -83,7 +142,10 @@ export default function RootLayout() {
   return (
     <AuthProvider>
       <DiningDataProvider>
-        <RootLayoutNav />
+        {/* 🆕 NEW: Added EventsProvider to wrap your app for Fetch on Focus */}
+        <EventsProvider>
+          <RootLayoutNav />
+        </EventsProvider>
       </DiningDataProvider>
     </AuthProvider>
   );

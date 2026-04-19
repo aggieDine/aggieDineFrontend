@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "766201199597",
+    "project_id": "aggiedinebackend",
+    "storage_bucket": "aggiedinebackend.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:766201199597:android:42b045bde2044b7db605e4",
+        "android_client_info": {
+          "package_name": "com.aggieDine.aggieDine"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDiacNBz9rnNjFvw3hgIMOXJBPGY4Z-IiM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

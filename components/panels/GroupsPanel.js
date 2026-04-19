@@ -1,13 +1,17 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { useEffect, useMemo, useState } from 'react';
-import { Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useMemo, useState } from 'react';
+import { Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, RefreshControl } from 'react-native';
 
 import { InfoBanner, PrimaryButton, SecondaryButton } from '../ui/action-controls';
 import { EmptyState, HeroHeader, SectionTitle, SurfaceCard } from '../ui/app-surface';
 import { useDiningData } from '../../data/DiningDataContext';
 
-const STORAGE_KEY = 'groupInvites';
+// ✅ NEW IMPORTS FOR BACKEND INTEGRATION
+import { useEvents } from '../../data/EventsContext';
+import { useAuth } from '../../auth/AuthContext';
+
+const API_URL = 'https://nh19d71sp8.execute-api.us-east-2.amazonaws.com';
+
 // Date limit for the event creation 
 const TODAY = new Date();
 const END_OF_NEXT_WEEK = new Date();
@@ -16,12 +20,22 @@ END_OF_NEXT_WEEK.setDate(TODAY.getDate() + daysUntilNextSaturday);
 
 export default function GroupsPanel({ style }) {
   const { diningHalls } = useDiningData();
+  // ✅ PULL GLOBAL DATA FROM CONTEXT INSTEAD OF LOCAL STATE
+  const { events, fetchEvents } = useEvents(); 
+  const { idToken } = useAuth(); 
+
+  const [refreshing, setRefreshing] = useState(false);
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await fetchEvents(); // Wait for your context to fetch the fresh data
+    setRefreshing(false); // Stop the spinning wheel
+  }, [fetchEvents]);
+
   const diningSpots = useMemo(
     () => diningHalls.map((h) => h.name).sort((a, b) => a.localeCompare(b)),
     [diningHalls]
   );
 
-  const [invites, setInvites] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [restaurant, setRestaurant] = useState('');
   const [date, setDate] = useState('');
@@ -34,19 +48,6 @@ export default function GroupsPanel({ style }) {
   const [tempTime, setTempTime] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
-
-  useEffect(() => {
-    loadInvites();
-  }, []);
-
-  const loadInvites = async () => {
-    try {
-      const stored = await AsyncStorage.getItem(STORAGE_KEY);
-      if (stored) setInvites(JSON.parse(stored));
-    } catch (e) {
-      console.error(e);
-    }
-  };
 
   const onDateChange = (_event, selectedDate) => {
     if (Platform.OS === 'android') setShowDatePicker(false);
@@ -68,11 +69,7 @@ export default function GroupsPanel({ style }) {
     }
   };
 
-  const saveInvites = async (updated) => {
-    setInvites(updated);
-    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-  };
-
+  // ✅ REPLACED ASYNCSTORAGE WITH BACKEND API CALL
   const createInvite = async () => {
     setError('');
 
@@ -91,39 +88,80 @@ export default function GroupsPanel({ style }) {
       return;
     }
 
-    const newInvite = {
-      id: Date.now().toString(), // Need new id generating logic
-      restaurant: restaurant.trim(),
-      date: date.trim(),
-      time: time.trim(),
-      message: message.trim(),
-      friendName: friendName.trim() || 'Open Invite',
-      status: 'pending',
-      createdAt: new Date().toISOString(),
-    };
+    try {
+      // Combine date and time strings into a proper Date object for the backend
+      const currentYear = TODAY.getFullYear();
+      const [month, day] = date.split('/');
+      const combinedDateTime = new Date(`${currentYear}-${month}-${day}T${time}:00`);
 
-    const updated = [newInvite, ...invites];
-    await saveInvites(updated);
+      const response = await fetch(`${API_URL}/events`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${idToken}`
+        },
+        body: JSON.stringify({
+          location: restaurant.trim(),
+          time: combinedDateTime.toISOString(),
+          invited_users: friendName ? [friendName.trim()] : [],
+          message: message.trim(), 
+          is_private: false
+        })
+      });
 
-    setRestaurant('');
-    setDate('');
-    setTime('');
-    setMessage('');
-    setFriendName('');
-    setShowForm(false);
-    setError('');
+      if (response.ok) {
+        // Refresh the events list and clear the form
+        fetchEvents();
+        setRestaurant('');
+        setDate('');
+        setTime('');
+        setMessage('');
+        setFriendName('');
+        setShowForm(false);
+        setError('');
+      } else {
+        const errorData = await response.text();
+        console.error("Backend Error:", errorData);
+        setError('Failed to create invite on server.');
+      }
+    } catch (err) {
+      console.error("Network Error:", err);
+      setError('Network error. Check your connection.');
+    }
   };
 
-  const updateStatus = async (id, newStatus) => {
-    const updated = invites.map((invite) =>
-      invite.id === id ? { ...invite, status: newStatus } : invite
-    );
-    await saveInvites(updated);
+  // ✅ REPLACED ASYNCSTORAGE WITH BACKEND API CALL
+  const updateStatus = async (eventId, newStatus) => {
+    try {
+      // Example PUT route. Adjust if your backend expects a different route for accepting invites.
+      const response = await fetch(`${API_URL}/events/${eventId}/status`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${idToken}`
+        },
+        body: JSON.stringify({ status: newStatus })
+      });
+      if (response.ok) fetchEvents();
+    } catch (err) {
+      console.error("Failed to update status", err);
+    }
   };
 
-  const deleteInvite = async (id) => {
-    const updated = invites.filter((invite) => invite.id !== id);
-    await saveInvites(updated);
+  // ✅ REPLACED ASYNCSTORAGE WITH BACKEND API CALL
+  const deleteInvite = async (eventId) => {
+    try {
+      const encodedTime = encodeURIComponent(event.time);
+      const response = await fetch(`${API_URL}/events/${eventId}?event_time=${encodedTime}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${idToken}`
+        }
+      });
+      if (response.ok) fetchEvents();
+    } catch (err) {
+      console.error("Failed to delete event", err);
+    }
   };
 
   const getStatusColor = (status) => {
@@ -153,7 +191,18 @@ export default function GroupsPanel({ style }) {
     : diningSpots;
 
   return (
-    <View style={[styles.panel, style]}>
+    <ScrollView 
+      style={[styles.panel, style]}
+      showsVerticalScrollIndicator={false}
+      refreshControl={
+        <RefreshControl 
+          refreshing={refreshing} 
+          onRefresh={onRefresh} 
+          tintColor="#500000" // Aggie Maroon loading spinner!
+          colors={["#500000"]} // For Android
+        />
+      }
+    >
       <HeroHeader
         eyebrow="Social Layer"
         title="Invite people to eat"
@@ -301,9 +350,9 @@ export default function GroupsPanel({ style }) {
         </SurfaceCard>
       )}
 
-      <SectionTitle>{invites.length > 0 ? 'Your invites' : 'Invite activity'}</SectionTitle>
+      <SectionTitle>{events.length > 0 ? 'Your invites' : 'Invite activity'}</SectionTitle>
 
-      {invites.length === 0 && !showForm ? (
+      {events.length === 0 && !showForm ? (
         <EmptyState
           title="No invites yet"
           subtitle="Start simple: create one lunch invite for this week and see how the flow feels on a phone."
@@ -311,48 +360,58 @@ export default function GroupsPanel({ style }) {
         />
       ) : (
         <View style={styles.cardList}>
-          {invites.map((invite) => (
-            <SurfaceCard key={invite.id} style={styles.card}>
-              <View style={styles.cardTop}>
-                <View style={styles.cardHeader}>
-                  <Text style={styles.cardRestaurant}>{invite.restaurant}</Text>
-                  <View style={[styles.statusBadge, { backgroundColor: getStatusBg(invite.status) }]}>
-                    <Text style={[styles.statusText, { color: getStatusColor(invite.status) }]}>
-                      {invite.status.charAt(0).toUpperCase() + invite.status.slice(1)}
-                    </Text>
+          {events.map((event) => {
+            // ✅ FORMATTING ISO TIME BACK TO YOUR UI'S EXPECTED FORMAT
+            const eventDateObj = new Date(event.time);
+            const displayDate = `${(eventDateObj.getMonth() + 1).toString().padStart(2, '0')}/${eventDateObj.getDate().toString().padStart(2, '0')}`;
+            const displayTime = `${eventDateObj.getHours().toString().padStart(2, '0')}:${eventDateObj.getMinutes().toString().padStart(2, '0')}`;
+            
+            // Assume pending if backend doesn't provide status yet
+            const currentStatus = event.status || 'pending'; 
+
+            return (
+              <SurfaceCard key={event.event_id || Math.random().toString()} style={styles.card}>
+                <View style={styles.cardTop}>
+                  <View style={styles.cardHeader}>
+                    <Text style={styles.cardRestaurant}>{event.location}</Text>
+                    <View style={[styles.statusBadge, { backgroundColor: getStatusBg(currentStatus) }]}>
+                      <Text style={[styles.statusText, { color: getStatusColor(currentStatus) }]}>
+                        {currentStatus.charAt(0).toUpperCase() + currentStatus.slice(1)}
+                      </Text>
+                    </View>
                   </View>
+
+                  <Text style={styles.cardMeta}>
+                    {displayDate} | {displayTime} | {event.invited_users?.[0] || 'Open Invite'}
+                  </Text>
+
+                  {event.message ? (
+                    <Text style={styles.cardMessage}>{`"${event.message}"`}</Text>
+                  ) : null}
                 </View>
 
-                <Text style={styles.cardMeta}>
-                  {invite.date} | {invite.time} | {invite.friendName}
-                </Text>
+                <View style={styles.cardActions}>
+                  {/* {currentStatus === 'pending' ? (
+                    <>
+                      <Pressable style={styles.acceptBtn} onPress={() => updateStatus(event.event_id, 'accepted')}>
+                        <Text style={styles.acceptText}>Accept</Text>
+                      </Pressable>
+                      <Pressable style={styles.declineBtn} onPress={() => updateStatus(event.event_id, 'declined')}>
+                        <Text style={styles.declineText}>Decline</Text>
+                      </Pressable>
+                    </>
+                  ) : null} */}
 
-                {invite.message ? (
-                  <Text style={styles.cardMessage}>{`"${invite.message}"`}</Text>
-                ) : null}
-              </View>
-
-              <View style={styles.cardActions}>
-                {invite.status === 'pending' ? (
-                  <>
-                    <Pressable style={styles.acceptBtn} onPress={() => updateStatus(invite.id, 'accepted')}>
-                      <Text style={styles.acceptText}>Accept</Text>
-                    </Pressable>
-                    <Pressable style={styles.declineBtn} onPress={() => updateStatus(invite.id, 'declined')}>
-                      <Text style={styles.declineText}>Decline</Text>
-                    </Pressable>
-                  </>
-                ) : null}
-
-                <Pressable style={styles.removeBtn} onPress={() => deleteInvite(invite.id)}>
-                  <Text style={styles.removeText}>Delete</Text>
-                </Pressable>
-              </View>
-            </SurfaceCard>
-          ))}
+                  <Pressable style={styles.removeBtn} onPress={() => deleteInvite(event.event_id)}>
+                    <Text style={styles.removeText}>Delete</Text>
+                  </Pressable>
+                </View>
+              </SurfaceCard>
+            );
+          })}
         </View>
       )}
-    </View>
+    </ScrollView>
   );
 }
 
