@@ -1,18 +1,16 @@
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { useMemo, useState, useCallback, useEffect, useRef } from 'react';
-import { Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, RefreshControl, Keyboard } from 'react-native';
+import { useMemo, useState, useCallback, useEffect } from 'react';
+import { Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, RefreshControl, Keyboard, Alert } from 'react-native';
 
 import { InfoBanner, PrimaryButton, SecondaryButton } from '../ui/action-controls';
 import { EmptyState, HeroHeader, SectionTitle, SurfaceCard } from '../ui/app-surface';
 import { useDiningData } from '../../data/DiningDataContext';
-
-// ✅ NEW IMPORTS FOR BACKEND INTEGRATION
 import { useEvents } from '../../data/EventsContext';
 import { useAuth } from '../../auth/AuthContext'; 
 
 const API_URL = 'https://nh19d71sp8.execute-api.us-east-2.amazonaws.com';
 
-// Date limit for the event creation 
+// Date limits
 const TODAY = new Date();
 const END_OF_NEXT_WEEK = new Date();
 const daysUntilNextSaturday = 13 - TODAY.getDay();
@@ -20,15 +18,14 @@ END_OF_NEXT_WEEK.setDate(TODAY.getDate() + daysUntilNextSaturday);
 
 export default function GroupsPanel({ style }) {
   const { diningHalls } = useDiningData();
-  // ✅ PULL GLOBAL DATA FROM CONTEXT INSTEAD OF LOCAL STATE
-  const { events, fetchEvents, addEvent, removeEvent } = useEvents(); 
+  const { events, fetchEvents, addEvent, updateEvent, removeEvent } = useEvents(); 
   const { user, idToken } = useAuth();
 
   const [refreshing, setRefreshing] = useState(false);
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await fetchEvents(); // Wait for your context to fetch the fresh data
-    setRefreshing(false); // Stop the spinning wheel
+    await fetchEvents();
+    setRefreshing(false);
   }, [fetchEvents]);
 
   const diningSpots = useMemo(
@@ -36,243 +33,251 @@ export default function GroupsPanel({ style }) {
     [diningHalls]
   );
 
+  // Form state
+  const [editingEvent, setEditingEvent] = useState(null); // null = create mode, object = edit mode
   const [showForm, setShowForm] = useState(false);
-  const [restaurant, setRestaurant] = useState('');
-  const [date, setDate] = useState('');
-  const [time, setTime] = useState('');
-  const [message, setMessage] = useState('');
-  const [friendName, setFriendName] = useState('');
+  const [location, setLocation] = useState('');
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [selectedTime, setSelectedTime] = useState(new Date());
+  const [invitedUsers, setInvitedUsers] = useState('');
+  const [isPrivate, setIsPrivate] = useState(false);
   const [error, setError] = useState('');
-  const [showRestaurantPicker, setShowRestaurantPicker] = useState(false);
-  const [tempDate, setTempDate] = useState(new Date());
-  const [tempTime, setTempTime] = useState(new Date());
+  
+  // UI state
+  const [showLocationPicker, setShowLocationPicker] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
-  const inputRef = useRef(null);
 
-  useEffect(() => {
-    console.log("Current idToken status:", idToken ? "ACTIVE" : "NULL");
-  }, [idToken]);
+  const filteredLocations = location.trim()
+    ? diningSpots.filter((item) => item.toLowerCase().includes(location.toLowerCase()))
+    : diningSpots;
 
-  const onDateChange = (_event, selectedDate) => {
-    if (Platform.OS === 'android') setShowDatePicker(false);
-    if (selectedDate) {
-      setTempDate(selectedDate);
-      const month = (selectedDate.getMonth() + 1).toString().padStart(2, '0');
-      const day = selectedDate.getDate().toString().padStart(2, '0');
-      setDate(`${month}/${day}`);
-    }
+  // Reset form
+  const resetForm = () => {
+    setEditingEvent(null);
+    setLocation('');
+    setSelectedDate(new Date());
+    setSelectedTime(new Date());
+    setInvitedUsers('');
+    setIsPrivate(false);
+    setError('');
+    setShowForm(false);
   };
 
-  const onTimeChange = (_event, selectedDate) => {
-    if (Platform.OS === 'android') setShowTimePicker(false);
-    if (selectedDate) {
-      setTempTime(selectedDate);
-      const hours = selectedDate.getHours().toString().padStart(2, '0');
-      const minutes = selectedDate.getMinutes().toString().padStart(2, '0');
-      setTime(`${hours}:${minutes}`);
-    }
+  // Open form for creating new event
+  const openCreateForm = () => {
+    resetForm();
+    setShowForm(true);
   };
 
-  // ✅ REPLACED ASYNCSTORAGE WITH BACKEND API CALL
-  const createInvite = async () => {
+  // Open form for editing existing event
+  const openEditForm = (event) => {
+    setEditingEvent(event);
+    setLocation(event.location);
+    const eventDate = new Date(event.time);
+    setSelectedDate(eventDate);
+    setSelectedTime(eventDate);
+    setInvitedUsers(event.invited_users?.join(', ') || '');
+    setIsPrivate(event.is_private);
+    setError('');
+    setShowForm(true);
+  };
+
+  // Create or update event
+  const submitEvent = async () => {
     setError('');
 
     if (!idToken) {
-      setError('Session expired. Please log in again to create invites.');
-      console.error("Blocking request: idToken is null.");
+      setError('Session expired. Please log in again.');
       return; 
     }
 
-    if (!restaurant.trim()) {
+    if (!location.trim()) {
       setError('Pick a dining spot.');
       return;
     }
 
-    if (!date.trim()) {
-      setError('Enter a date like 04/15.');
-      return;
-    }
-
-    if (!time.trim()) {
-      setError('Enter a time.');
-      return;
-    }
-
     try {
-      // Combine date and time strings into a proper Date object for the backend
-      const currentYear = TODAY.getFullYear();
-      const [month, day] = date.split('/');
-      const combinedDateTime = new Date(`${currentYear}-${month}-${day}T${time}:00`);
+      // Combine date and time
+      const combinedDateTime = new Date(
+        selectedDate.getFullYear(),
+        selectedDate.getMonth(),
+        selectedDate.getDate(),
+        selectedTime.getHours(),
+        selectedTime.getMinutes()
+      );
 
-      console.log("DEBUG: Sending token:", idToken);
+      const eventData = {
+        location: location.trim(),
+        time: combinedDateTime.toISOString(),
+        invited_users: invitedUsers 
+          ? invitedUsers.split(',').map(u => u.trim()).filter(Boolean)
+          : [],
+        is_private: isPrivate
+      };
 
-      const response = await fetch(`${API_URL}/events`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${idToken}`
-        },
-        body: JSON.stringify({
-          location: restaurant.trim(),
-          time: combinedDateTime.toISOString(),
-          invited_users: friendName ? [friendName.trim()] : [],
-          message: message.trim(), 
-          is_private: false
-        })
-      });
+      if (editingEvent) {
+        // UPDATE existing event
+        const encodedTime = encodeURIComponent(editingEvent.time);
+        const response = await fetch(
+          `${API_URL}/events/${editingEvent.event_id}?event_time=${encodedTime}`, 
+          {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${idToken}`
+            },
+            body: JSON.stringify(eventData)
+          }
+        );
 
-      if (response.ok) {
-        // Refresh the events list and clear the form
-        const newEvent = await response.json(); 
-        addEvent(newEvent);
-        setRestaurant('');
-        setDate('');
-        setTime('');
-        setMessage('');
-        setFriendName('');
-        setShowForm(false);
-        setError('');
+        if (response.ok) {
+          const updatedEventData = await response.json();
+          updateEvent(updatedEventData);
+          resetForm();
+        } else {
+          const errorText = await response.text();
+          console.error("Update error:", errorText);
+          setError('Failed to update event.');
+        }
       } else {
-        const errorData = await response.text();
-        console.error("Backend Error:", errorData);
-        setError('Failed to create invite on server.');
+        // CREATE new event
+        const response = await fetch(`${API_URL}/events`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${idToken}`
+          },
+          body: JSON.stringify(eventData)
+        });
+
+        if (response.ok) {
+          const newEventData = await response.json();
+          addEvent(newEventData);
+          resetForm();
+        } else {
+          const errorText = await response.text();
+          console.error("Create error:", errorText);
+          setError('Failed to create event.');
+        }
       }
     } catch (err) {
-      console.error("Network Error:", err);
+      console.error("Network error:", err);
       setError('Network error. Check your connection.');
     }
   };
 
-  // ✅ REPLACED ASYNCSTORAGE WITH BACKEND API CALL
-  const updateStatus = async (eventId, newStatus) => {
-    try {
-      // Example PUT route. Adjust if your backend expects a different route for accepting invites.
-      const response = await fetch(`${API_URL}/events/${eventId}/status`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${idToken}`
-        },
-        body: JSON.stringify({ status: newStatus })
-      });
-      if (response.ok) fetchEvents();
-    } catch (err) {
-      console.error("Failed to update status", err);
-    }
-  };
-
-  // ✅ REPLACED ASYNCSTORAGE WITH BACKEND API CALL
-  const deleteInvite = async (event) => {
-    try {
-      const encodedTime = encodeURIComponent(event.time);
-      const response = await fetch(`${API_URL}/events/${event.event_id}?event_time=${encodedTime}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${idToken}`
+  // Delete event
+  const deleteEvent = async (event) => {
+    Alert.alert(
+      'Delete Event',
+      `Are you sure you want to delete the event at ${event.location}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const encodedTime = encodeURIComponent(event.time);
+              const response = await fetch(
+                `${API_URL}/events/${event.event_id}?event_time=${encodedTime}`,
+                {
+                  method: 'DELETE',
+                  headers: { 'Authorization': `Bearer ${idToken}` }
+                }
+              );
+              if (response.ok) {
+                removeEvent(event.event_id);
+              } else {
+                Alert.alert('Error', 'Failed to delete event');
+              }
+            } catch (err) {
+              console.error("Delete error:", err);
+              Alert.alert('Error', 'Network error');
+            }
+          }
         }
-      });
-      if (response.ok) removeEvent(event.event_id);
-    } catch (err) {
-      console.error("Failed to delete event", err);
-    }
+      ]
+    );
   };
 
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'accepted':
-        return '#16A34A';
-      case 'declined':
-        return '#DC2626';
-      default:
-        return '#F59E0B';
-    }
+  // Format date/time for display
+  const formatDateTime = (isoString) => {
+    const date = new Date(isoString);
+    const dateStr = `${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getDate().toString().padStart(2, '0')}`;
+    const timeStr = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    return { dateStr, timeStr };
   };
-
-  const getStatusBg = (status) => {
-    switch (status) {
-      case 'accepted':
-        return '#F0FDF4';
-      case 'declined':
-        return '#FEF2F2';
-      default:
-        return '#FFFBEB';
-    }
-  };
-
-  const filteredRestaurants = restaurant.trim()
-    ? diningSpots.filter((item) => item.toLowerCase().includes(restaurant.toLowerCase()))
-    : diningSpots;
 
   return (
-    <ScrollView 
+    <ScrollView
       style={[styles.panel, style]}
       showsVerticalScrollIndicator={false}
-      keyboardShouldPersistTaps="always"
+      keyboardShouldPersistTaps="handled"
       refreshControl={
-        <RefreshControl 
-          refreshing={refreshing} 
-          onRefresh={onRefresh} 
-          tintColor="#500000" // Aggie Maroon loading spinner!
-          colors={["#500000"]} // For Android
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          tintColor="#500000"
+          colors={["#500000"]}
         />
       }
     >
       <HeroHeader
         eyebrow="Social Layer"
-        title="Invite people to eat"
-        subtitle="This is where the product starts to feel alive. Keep the form quick, friendly, and easy to use with one hand on a phone."
-      />
-
-      <InfoBanner
-        title="For the web launch"
-        body="Focus on fast invite creation and clear status cards. The backend can make it truly multi-user later without changing this overall flow."
+        title="Dining Events"
+        subtitle="Create and manage group dining events"
       />
 
       {!showForm ? (
-        <PrimaryButton label="Create invite" onPress={() => setShowForm(true)} style={styles.topButton} />
+        <PrimaryButton
+          label="Create Event"
+          onPress={openCreateForm}
+          style={styles.topButton}
+        />
       ) : (
         <SurfaceCard style={styles.form}>
+          {/* Form Header */}
           <View style={styles.formHeader}>
-            <SectionTitle style={styles.formTitle}>New invite</SectionTitle>
-            <Pressable onPress={() => setShowForm(false)} style={styles.closeButton}>
-              <Text style={styles.closeText}>Close</Text>
+            <SectionTitle style={styles.formTitle}>
+              {editingEvent ? "Edit Event" : "New Event"}
+            </SectionTitle>
+            <Pressable onPress={resetForm} style={styles.closeButton}>
+              <Text style={styles.closeText}>Cancel</Text>
             </Pressable>
           </View>
 
-          <Text style={styles.label}>Dining spot</Text>
+          {/* Location Picker */}
+          <Text style={styles.label}>Dining Spot</Text>
           <View style={styles.autocompleteWrap}>
             <TextInput
-              ref={inputRef} // 2. Attach the ref here
               style={styles.input}
               placeholder="Search dining spots..."
-              value={restaurant}
+              value={location}
               onChangeText={(value) => {
-                setRestaurant(value);
-                setShowRestaurantPicker(true);
+                setLocation(value);
+                setShowLocationPicker(true);
               }}
-              onFocus={() => setShowRestaurantPicker(true)}
-              // Increase delay slightly or handle differently if it feels glitchy
-              onFocus={() => setShowRestaurantPicker(true)}
+              onFocus={() => setShowLocationPicker(true)}
             />
 
-            {showRestaurantPicker && filteredRestaurants.length > 0 && (
+            {showLocationPicker && filteredLocations.length > 0 && (
               <View style={styles.dropdown}>
-                <ScrollView 
-                  nestedScrollEnabled={true} 
-                  keyboardShouldPersistTaps="handled" 
-                  style={{ flex: 1 }}
+                <ScrollView
+                  nestedScrollEnabled
+                  keyboardShouldPersistTaps="handled"
                 >
-                  {filteredRestaurants.map((item) => (
+                  {filteredLocations.map((item) => (
                     <Pressable
                       key={item}
                       style={styles.dropdownItem}
-                      onPressIn={() => {
-                        console.log("Selected:", item);
-                        setRestaurant(item); // Updates the 'value' in TextInput
-                        setShowRestaurantPicker(false);
-                        Keyboard.dismiss(); // 5. Hide the keyboard
-                      }}>
+                      onPress={() => {
+                        setLocation(item);
+                        setShowLocationPicker(false);
+                        Keyboard.dismiss();
+                      }}
+                    >
                       <Text style={styles.dropdownText}>{item}</Text>
                     </Pressable>
                   ))}
@@ -281,153 +286,201 @@ export default function GroupsPanel({ style }) {
             )}
           </View>
 
+          {/* Date & Time */}
           <View style={styles.row}>
             <View style={styles.halfCol}>
               <Text style={styles.label}>Date</Text>
-              {Platform.OS === 'web' ? (
-                <input
-                  type="date"
-                  min={TODAY.toISOString().split('T')[0]}
-                  max={END_OF_NEXT_WEEK.toISOString().split('T')[0]}
-                  value={date ? `2026-${date.replace('/', '-')}` : ''}
-                  onChange={(e) => {
-                    const parts = e.target.value.split('-');
-                    if (parts.length === 3) setDate(`${parts[1]}/${parts[2]}`);
-                  }}
-                  style={styles.webInput}
-                />
-              ) : (
-                <View>
-                  <Pressable style={styles.input} onPress={() => setShowDatePicker(true)}>
-                    <Text style={[styles.inputText, !date && styles.placeholderText]}>
-                      {date || 'MM/DD'}
-                    </Text>
-                  </Pressable>
-                  {showDatePicker && (
-                    <DateTimePicker
-                      value={tempDate}
-                      mode="date"
-                      display="default"
-                      minimumDate={TODAY}
-                      maximumDate={END_OF_NEXT_WEEK}
-                      onChange={onDateChange}
-                    />
-                  )}
-                </View>
-              )}
+              <Pressable
+                style={styles.dateTimeButton}
+                onPress={() => {
+                  Keyboard.dismiss();
+                  setShowDatePicker(true);
+                  setShowTimePicker(false);
+                }}
+              >
+                <Text style={styles.dateTimeText}>
+                  {selectedDate.toLocaleDateString()}
+                </Text>
+              </Pressable>
             </View>
 
             <View style={styles.halfCol}>
               <Text style={styles.label}>Time</Text>
-              {Platform.OS === 'web' ? (
-                <input
-                  type="time"
-                  value={time}
-                  onChange={(e) => setTime(e.target.value)}
-                  style={styles.webInput}
-                />
-              ) : (
-                <View>
-                  <Pressable style={styles.input} onPress={() => setShowTimePicker(true)}>
-                    <Text style={[styles.inputText, !time && styles.placeholderText]}>
-                      {time || '12:30'}
-                    </Text>
-                  </Pressable>
-                  {showTimePicker && (
-                    <DateTimePicker
-                      value={tempTime}
-                      mode="time"
-                      display="default"
-                      onChange={onTimeChange}
-                    />
-                  )}
-                </View>
-              )}
+              <Pressable
+                style={styles.dateTimeButton}
+                onPress={() => {
+                  Keyboard.dismiss();
+                  setShowDatePicker(false);
+                  setShowTimePicker(true);
+                }}
+              >
+                <Text style={styles.dateTimeText}>
+                  {selectedTime.toLocaleTimeString("en-US", {
+                    hour: "numeric",
+                    minute: "2-digit",
+                  })}
+                </Text>
+              </Pressable>
             </View>
           </View>
 
-          <Text style={styles.label}>Invite who? (optional)</Text>
+          {showDatePicker && (
+            <View
+              style={Platform.OS === "ios" ? styles.iosPickerContainer : {}}
+            >
+              <DateTimePicker
+                value={selectedDate}
+                mode="date"
+                display={Platform.OS === "ios" ? "spinner" : "default"}
+                minimumDate={TODAY}
+                maximumDate={END_OF_NEXT_WEEK}
+                themeVariant="light"
+                textColor="#333333"
+                onChange={(event, date) => {
+                  if (Platform.OS === "android") setShowDatePicker(false);
+                  if (date) setSelectedDate(date);
+                }}
+              />
+              {Platform.OS === "ios" && (
+                <Pressable
+                  style={styles.iosConfirmButton}
+                  onPress={() => setShowDatePicker(false)}
+                >
+                  <Text style={styles.iosConfirmText}>Confirm Date</Text>
+                </Pressable>
+              )}
+            </View>
+          )}
+
+          {showTimePicker && (
+            <View
+              style={Platform.OS === "ios" ? styles.iosPickerContainer : {}}
+            >
+              <DateTimePicker
+                value={selectedTime}
+                mode="time"
+                display={Platform.OS === "ios" ? "spinner" : "default"}
+                themeVariant="light"
+                textColor="#333333"
+                onChange={(event, time) => {
+                  if (Platform.OS === "android") setShowTimePicker(false);
+                  if (time) setSelectedTime(time);
+                }}
+              />
+              {Platform.OS === "ios" && (
+                <Pressable
+                  style={styles.iosConfirmButton}
+                  onPress={() => setShowTimePicker(false)}
+                >
+                  <Text style={styles.iosConfirmText}>Confirm Time</Text>
+                </Pressable>
+              )}
+            </View>
+          )}
+
+          {/* Invited Users */}
+          <Text style={styles.label}>Invite Users (comma-separated IDs)</Text>
           <TextInput
             style={styles.input}
-            placeholder="Friend's name or leave blank for an open invite"
-            placeholderTextColor="#999"
-            value={friendName}
-            onChangeText={setFriendName}
+            placeholder="user1, user2, user3"
+            value={invitedUsers}
+            onChangeText={setInvitedUsers}
+            autoCapitalize="none"
           />
 
-          <Text style={styles.label}>Message (optional)</Text>
-          <TextInput
-            style={[styles.input, styles.textArea]}
-            placeholder="e.g. Let's grab lunch after class"
-            placeholderTextColor="#999"
-            value={message}
-            onChangeText={setMessage}
-            multiline
-            numberOfLines={3}
-          />
+          {/* Privacy Toggle */}
+          <View style={styles.privacyRow}>
+            <Text style={styles.privacyLabel}>Private Event</Text>
+            <Pressable
+              style={[styles.toggle, isPrivate && styles.toggleActive]}
+              onPress={() => setIsPrivate(!isPrivate)}
+            >
+              <View
+                style={[
+                  styles.toggleKnob,
+                  isPrivate && styles.toggleKnobActive,
+                ]}
+              />
+            </Pressable>
+          </View>
 
+          {/* Error Message */}
           {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
-          <PrimaryButton label="Send invite" onPress={createInvite} style={styles.submitButton} />
+          {/* Submit Button */}
+          <PrimaryButton
+            label={editingEvent ? "Update Event" : "Create Event"}
+            onPress={submitEvent}
+            style={styles.submitButton}
+          />
         </SurfaceCard>
       )}
 
-      <SectionTitle>{events.length > 0 ? 'Your Events' : 'Invite activity'}</SectionTitle>
-
-      {events.length === 0 && !showForm ? (
+      {/* Events List */}
+      {events.length === 0 ? (
         <EmptyState
-          title="No invites yet"
-          subtitle="Start simple: create one lunch invite for this week and see how the flow feels on a phone."
-          action={<SecondaryButton label="Start with lunch" onPress={() => setShowForm(true)} />}
+          icon="📅"
+          title="No events yet"
+          subtitle="Create your first dining event to get started"
         />
       ) : (
         <View style={styles.cardList}>
           {events.map((event) => {
-            // ✅ FORMATTING ISO TIME BACK TO YOUR UI'S EXPECTED FORMAT
-            const eventDateObj = new Date(event.time);
-            const displayDate = `${(eventDateObj.getMonth() + 1).toString().padStart(2, '0')}/${eventDateObj.getDate().toString().padStart(2, '0')}`;
-            const displayTime = `${eventDateObj.getHours().toString().padStart(2, '0')}:${eventDateObj.getMinutes().toString().padStart(2, '0')}`;
-            
-            // Assume pending if backend doesn't provide status yet
-            const currentStatus = event.status || 'pending'; 
+            const { dateStr, timeStr } = formatDateTime(event.time);
+            const isCreator = event.created_by === user?.uid;
 
             return (
-              <SurfaceCard key={event.event_id || Math.random().toString()} style={styles.card}>
-                <View style={styles.cardTop}>
-                  <View style={styles.cardHeader}>
-                    <Text style={styles.cardRestaurant}>{event.location}</Text>
-                    <View style={[styles.statusBadge, { backgroundColor: getStatusBg(currentStatus) }]}>
-                      <Text style={[styles.statusText, { color: getStatusColor(currentStatus) }]}>
-                        {currentStatus.charAt(0).toUpperCase() + currentStatus.slice(1)}
-                      </Text>
-                    </View>
+              <SurfaceCard key={event.event_id} style={styles.card}>
+                {/* Event Header */}
+                <View style={styles.cardHeader}>
+                  <View style={styles.cardHeaderLeft}>
+                    <Text style={styles.cardLocation}>{event.location}</Text>
+                    <Text style={styles.cardTime}>
+                      {dateStr} • {timeStr}
+                    </Text>
                   </View>
-
-                  <Text style={styles.cardMeta}>
-                    {displayDate} | {displayTime} | {event.invited_users?.[0] || 'Open Invite'}
-                  </Text>
-
-                  {event.message ? (
-                    <Text style={styles.cardMessage}>{`"${event.message}"`}</Text>
-                  ) : null}
+                  {event.is_private ? (
+                    <View style={styles.privateBadge}>
+                      <Text style={styles.privateBadgeText}>Private</Text>
+                    </View>
+                  ) : (
+                    <View style={styles.publicBadge}>
+                      <Text style={styles.publicBadgeText}>Public</Text>
+                    </View>
+                  )}
                 </View>
 
-                <View style={styles.cardActions}>
-                  {/* {currentStatus === 'pending' ? (
-                    <>
-                      <Pressable style={styles.acceptBtn} onPress={() => updateStatus(event.event_id, 'accepted')}>
-                        <Text style={styles.acceptText}>Accept</Text>
-                      </Pressable>
-                      <Pressable style={styles.declineBtn} onPress={() => updateStatus(event.event_id, 'declined')}>
-                        <Text style={styles.declineText}>Decline</Text>
-                      </Pressable>
-                    </>
-                  ) : null} */}
+                {/* Invited Users */}
+                {event.invited_users && event.invited_users.length > 0 && (
+                  <View style={styles.invitedSection}>
+                    <Text style={styles.invitedLabel}>Invited:</Text>
+                    <Text style={styles.invitedText}>
+                      {event.invited_users.join(", ")}
+                    </Text>
+                  </View>
+                )}
 
-                  <Pressable style={styles.removeBtn} onPress={() => deleteInvite(event)}>
-                    <Text style={styles.removeText}>Delete</Text>
-                  </Pressable>
-                </View>
+                {/* Creator Badge */}
+                {isCreator && (
+                  <Text style={styles.creatorText}>Created by you</Text>
+                )}
+
+                {/* Actions */}
+                {isCreator && (
+                  <View style={styles.cardActions}>
+                    <SecondaryButton
+                      label="Edit"
+                      onPress={() => openEditForm(event)}
+                      style={styles.actionButton}
+                    />
+                    <Pressable
+                      style={styles.deleteButton}
+                      onPress={() => deleteEvent(event)}
+                    >
+                      <Text style={styles.deleteText}>Delete</Text>
+                    </Pressable>
+                  </View>
+                )}
               </SurfaceCard>
             );
           })}
@@ -446,13 +499,13 @@ const styles = StyleSheet.create({
   },
   form: {
     marginBottom: 24,
+    padding: 20,
   },
   formHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    gap: 12,
-    marginBottom: 2,
+    marginBottom: 20,
   },
   formTitle: {
     marginBottom: 0,
@@ -460,7 +513,7 @@ const styles = StyleSheet.create({
   closeButton: {
     backgroundColor: '#F3E7E0',
     borderRadius: 999,
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
     paddingVertical: 8,
   },
   closeText: {
@@ -469,19 +522,19 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   label: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '700',
     color: '#500000',
-    marginTop: 14,
-    marginBottom: 6,
+    marginTop: 16,
+    marginBottom: 8,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   autocompleteWrap: {
+    position: 'relative',
     zIndex: 10,
   },
   input: {
-    width: '100%',
     backgroundColor: '#F8F5F0',
     padding: 14,
     borderRadius: 12,
@@ -490,28 +543,29 @@ const styles = StyleSheet.create({
     borderColor: '#E8E2DA',
     color: '#333',
   },
-  inputText: {
-    color: '#333',
+  dropdown: {
+    position: 'absolute',
+    top: 54,
+    left: 0,
+    right: 0,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E8E2DA',
+    maxHeight: 200,
+    zIndex: 1000,
+    elevation: 5,
+    overflow: 'hidden',
+    marginTop: 4,
+  },
+  dropdownItem: {
+    padding: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0ECE6',
+  },
+  dropdownText: {
     fontSize: 15,
-  },
-  placeholderText: {
-    color: '#999',
-  },
-  webInput: {
-    backgroundColor: '#F8F5F0',
-    padding: '14px',
-    borderRadius: '12px',
-    fontSize: '15px',
-    border: '1px solid #E8E2DA',
     color: '#333',
-    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
-    width: '100%',
-    boxSizing: 'border-box',
-    outline: 'none',
-  },
-  textArea: {
-    minHeight: 88,
-    textAlignVertical: 'top',
   },
   row: {
     flexDirection: 'row',
@@ -520,43 +574,80 @@ const styles = StyleSheet.create({
   halfCol: {
     flex: 1,
   },
-  dropdown: {
-  backgroundColor: '#FFFFFF',
-  borderRadius: 12,
-  borderWidth: 1,
-  borderColor: '#E8E2DA',
-  marginTop: 6,
-  
-  // 🟢 Updated logic for both Web and Native
-  position: 'absolute',
-  top: 54,
-  left: 0,
-  right: 0,
-  maxHeight: 200, // Important for scrolling!
-  
-  // 🟢 Stacking fix
-  zIndex: 1000,   // Works on iOS and Web
-  elevation: 5,   // 👈 ESSENTIAL for Android
-  
-  overflow: 'hidden', // Keeps the scroll view inside the rounded corners
+  dateTimeButton: {
+    backgroundColor: '#F8F5F0',
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E8E2DA',
+    alignItems: 'center',
   },
-  dropdownItem: {
-    padding: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0ECE6',
-  },
-  dropdownText: {
-    fontSize: 14,
+  dateTimeText: {
+    fontSize: 15,
     color: '#333',
+    fontWeight: '500',
+  },
+  iosPickerContainer: {
+    backgroundColor: '#F8F5F0',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E8E2DA',
+    marginTop: 12,
+    paddingBottom: 12,
+    overflow: 'hidden',
+  },
+  iosConfirmButton: {
+    backgroundColor: '#500000',
+    marginHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  iosConfirmText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  privacyRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 20,
+    paddingVertical: 8,
+  },
+  privacyLabel: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#333',
+  },
+  toggle: {
+    width: 50,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: '#E8E2DA',
+    padding: 3,
+    justifyContent: 'center',
+  },
+  toggleActive: {
+    backgroundColor: '#500000',
+  },
+  toggleKnob: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+  },
+  toggleKnobActive: {
+    alignSelf: 'flex-end',
   },
   errorText: {
     color: '#DC2626',
     fontSize: 13,
-    marginTop: 10,
+    marginTop: 12,
     fontWeight: '500',
   },
   submitButton: {
-    marginTop: 20,
+    marginTop: 24,
   },
   cardList: {
     gap: 12,
@@ -564,88 +655,93 @@ const styles = StyleSheet.create({
   card: {
     padding: 18,
   },
-  cardTop: {
-    marginBottom: 12,
-  },
   cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    gap: 10,
     marginBottom: 8,
   },
-  cardRestaurant: {
+  cardHeaderLeft: {
     flex: 1,
+  },
+  cardLocation: {
     fontSize: 17,
     fontWeight: '700',
     color: '#333',
+    marginBottom: 4,
   },
-  statusBadge: {
-    paddingVertical: 5,
-    paddingHorizontal: 10,
-    borderRadius: 999,
-  },
-  statusText: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  cardMeta: {
+  cardTime: {
     fontSize: 13,
     color: '#777',
-    marginBottom: 4,
-    lineHeight: 18,
   },
-  cardMessage: {
+  privateBadge: {
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+  },
+  privateBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#92400E',
+  },
+  publicBadge: {
+    backgroundColor: '#e3fec7',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+  },
+  publicBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#382',
+  },
+  invitedSection: {
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#F0ECE6',
+  },
+  invitedLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#500000',
+    marginBottom: 4,
+  },
+  invitedText: {
     fontSize: 13,
     color: '#555',
+  },
+  creatorText: {
+    fontSize: 12,
+    color: '#777',
+    marginTop: 8,
     fontStyle: 'italic',
-    marginTop: 6,
-    lineHeight: 19,
   },
   cardActions: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
     gap: 8,
+    marginTop: 12,
+    paddingTop: 12,
     borderTopWidth: 1,
     borderTopColor: '#F0ECE6',
-    paddingTop: 12,
   },
-  acceptBtn: {
-    backgroundColor: '#F0FDF4',
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#BBF7D0',
+  actionButton: {
+    flex: 1,
   },
-  acceptText: {
-    color: '#16A34A',
-    fontWeight: '700',
-    fontSize: 13,
-  },
-  declineBtn: {
+  deleteButton: {
+    flex: 1,
     backgroundColor: '#FEF2F2',
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderRadius: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    alignItems: 'center',
     borderWidth: 1,
     borderColor: '#FECACA',
   },
-  declineText: {
+  deleteText: {
     color: '#DC2626',
-    fontWeight: '700',
-    fontSize: 13,
-  },
-  removeBtn: {
-    marginLeft: 'auto',
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderRadius: 10,
-    backgroundColor: '#F8F5F0',
-  },
-  removeText: {
-    color: '#6B615C',
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '700',
   },
 });
