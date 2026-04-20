@@ -9,7 +9,7 @@ import * as WebBrowser from 'expo-web-browser';
 // 🆕 NEW IMPORTS FOR FCM & EVENTS
 // ==========================================
 import { EventsProvider, useEvents } from '../data/EventsContext'; 
-import { setupFCMListeners, registerDeviceToken } from '../services/fcmService'; 
+// import { setupFCMListeners, registerDeviceToken } from '../services/fcmService'; 
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -25,46 +25,46 @@ function RootLayoutNav() {
   // ==========================================
   // 🆕 NEW: FCM INITIALIZATION & LISTENERS
   // ==========================================
-  useEffect(() => {
-    let unsubscribeFCM: (() => void) | undefined;
+  // useEffect(() => {
+  //   let unsubscribeFCM: (() => void) | undefined;
 
-    const initializeFCM = async () => {
-      // 1. Only register if user is logged in
-      if (user && idToken) {
-        console.log('🔐 User authenticated, registering FCM token...');
+  //   const initializeFCM = async () => {
+  //     // 1. Only register if user is logged in
+  //     if (user && idToken) {
+  //       console.log('🔐 User authenticated, registering FCM token...');
         
         
-        await registerDeviceToken(idToken, API_URL);
+  //       await registerDeviceToken(idToken, API_URL);
 
-        // 2. Setup the foreground listeners
-        unsubscribeFCM = setupFCMListeners((action: any, eventData: any) => {
-          console.log(`📨 Foreground FCM Message Received: ${action}`, eventData);
+  //       // 2. Setup the foreground listeners
+  //       unsubscribeFCM = setupFCMListeners((action: any, eventData: any) => {
+  //         console.log(`📨 Foreground FCM Message Received: ${action}`, eventData);
 
-          // Since you are using "Fetch on Focus", you just need this to catch
-          // real-time updates while the user is actively looking at the screen.
-          // ✅ 2. Actually update the UI when the message arrives!
-          if (action === 'event_created') {
-             addEvent(eventData); 
-          } else if (action === 'event_updated') {
-             updateEvent(eventData);
-          } else if (action === 'event_deleted') {
-             removeEvent(eventData.event_id);
-          }
-        });
-      }
-    };
+  //         // Since you are using "Fetch on Focus", you just need this to catch
+  //         // real-time updates while the user is actively looking at the screen.
+  //         // ✅ 2. Actually update the UI when the message arrives!
+  //         if (action === 'event_created') {
+  //            addEvent(eventData); 
+  //         } else if (action === 'event_updated') {
+  //            updateEvent(eventData);
+  //         } else if (action === 'event_deleted') {
+  //            removeEvent(eventData.event_id);
+  //         }
+  //       });
+  //     }
+  //   };
 
-    if (!isLoading && !handlingCode) {
-      initializeFCM();
-    }
+  //   if (!isLoading && !handlingCode) {
+  //     initializeFCM();
+  //   }
 
-    // Cleanup ONLY the listener on unmount
-    return () => {
-      if (unsubscribeFCM) {
-        unsubscribeFCM();
-      }
-    };
-  }, [user, idToken, isLoading, handlingCode]);
+  //   // Cleanup ONLY the listener on unmount
+  //   return () => {
+  //     if (unsubscribeFCM) {
+  //       unsubscribeFCM();
+  //     }
+  //   };
+  // }, [user, idToken, isLoading, handlingCode]);
 
 
   // ==========================================

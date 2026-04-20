@@ -97,8 +97,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         email: email.toLowerCase(),
         displayName: 'Dev User',
       };
+
+      const mockToken = "dummy.dev.token";
+
       setUser(newUser);
+      setIdToken(mockToken);
+
       await AsyncStorage.setItem('user', JSON.stringify(newUser));
+      await AsyncStorage.setItem('idToken', mockToken);
     } else {
       setIsLoading(false);
       throw new Error('Invalid credentials. Use a @tamu.edu email.');

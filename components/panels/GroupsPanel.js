@@ -1,6 +1,6 @@
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { useMemo, useState } from 'react';
-import { Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, RefreshControl } from 'react-native';
+import { useMemo, useState, useCallback, useEffect, useRef } from 'react';
+import { Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, RefreshControl, Keyboard } from 'react-native';
 
 import { InfoBanner, PrimaryButton, SecondaryButton } from '../ui/action-controls';
 import { EmptyState, HeroHeader, SectionTitle, SurfaceCard } from '../ui/app-surface';
@@ -8,7 +8,7 @@ import { useDiningData } from '../../data/DiningDataContext';
 
 // ✅ NEW IMPORTS FOR BACKEND INTEGRATION
 import { useEvents } from '../../data/EventsContext';
-import { useAuth } from '../../auth/AuthContext';
+import { useAuth } from '../../auth/AuthContext'; 
 
 const API_URL = 'https://nh19d71sp8.execute-api.us-east-2.amazonaws.com';
 
@@ -21,8 +21,8 @@ END_OF_NEXT_WEEK.setDate(TODAY.getDate() + daysUntilNextSaturday);
 export default function GroupsPanel({ style }) {
   const { diningHalls } = useDiningData();
   // ✅ PULL GLOBAL DATA FROM CONTEXT INSTEAD OF LOCAL STATE
-  const { events, fetchEvents } = useEvents(); 
-  const { idToken } = useAuth(); 
+  const { events, fetchEvents, addEvent, removeEvent } = useEvents(); 
+  const { user, idToken } = useAuth();
 
   const [refreshing, setRefreshing] = useState(false);
   const onRefresh = useCallback(async () => {
@@ -48,6 +48,11 @@ export default function GroupsPanel({ style }) {
   const [tempTime, setTempTime] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
+  const inputRef = useRef(null);
+
+  useEffect(() => {
+    console.log("Current idToken status:", idToken ? "ACTIVE" : "NULL");
+  }, [idToken]);
 
   const onDateChange = (_event, selectedDate) => {
     if (Platform.OS === 'android') setShowDatePicker(false);
@@ -73,6 +78,12 @@ export default function GroupsPanel({ style }) {
   const createInvite = async () => {
     setError('');
 
+    if (!idToken) {
+      setError('Session expired. Please log in again to create invites.');
+      console.error("Blocking request: idToken is null.");
+      return; 
+    }
+
     if (!restaurant.trim()) {
       setError('Pick a dining spot.');
       return;
@@ -94,6 +105,8 @@ export default function GroupsPanel({ style }) {
       const [month, day] = date.split('/');
       const combinedDateTime = new Date(`${currentYear}-${month}-${day}T${time}:00`);
 
+      console.log("DEBUG: Sending token:", idToken);
+
       const response = await fetch(`${API_URL}/events`, {
         method: 'POST',
         headers: {
@@ -111,7 +124,8 @@ export default function GroupsPanel({ style }) {
 
       if (response.ok) {
         // Refresh the events list and clear the form
-        fetchEvents();
+        const newEvent = await response.json(); 
+        addEvent(newEvent);
         setRestaurant('');
         setDate('');
         setTime('');
@@ -149,16 +163,16 @@ export default function GroupsPanel({ style }) {
   };
 
   // ✅ REPLACED ASYNCSTORAGE WITH BACKEND API CALL
-  const deleteInvite = async (eventId) => {
+  const deleteInvite = async (event) => {
     try {
       const encodedTime = encodeURIComponent(event.time);
-      const response = await fetch(`${API_URL}/events/${eventId}?event_time=${encodedTime}`, {
+      const response = await fetch(`${API_URL}/events/${event.event_id}?event_time=${encodedTime}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${idToken}`
         }
       });
-      if (response.ok) fetchEvents();
+      if (response.ok) removeEvent(event.event_id);
     } catch (err) {
       console.error("Failed to delete event", err);
     }
@@ -194,6 +208,7 @@ export default function GroupsPanel({ style }) {
     <ScrollView 
       style={[styles.panel, style]}
       showsVerticalScrollIndicator={false}
+      keyboardShouldPersistTaps="always"
       refreshControl={
         <RefreshControl 
           refreshing={refreshing} 
@@ -228,35 +243,42 @@ export default function GroupsPanel({ style }) {
           <Text style={styles.label}>Dining spot</Text>
           <View style={styles.autocompleteWrap}>
             <TextInput
+              ref={inputRef} // 2. Attach the ref here
               style={styles.input}
               placeholder="Search dining spots..."
-              placeholderTextColor="#999"
               value={restaurant}
               onChangeText={(value) => {
                 setRestaurant(value);
                 setShowRestaurantPicker(true);
               }}
               onFocus={() => setShowRestaurantPicker(true)}
-              onBlur={() => setTimeout(() => setShowRestaurantPicker(false), 200)}
+              // Increase delay slightly or handle differently if it feels glitchy
+              onFocus={() => setShowRestaurantPicker(true)}
             />
 
-            {showRestaurantPicker && filteredRestaurants.length > 0 ? (
+            {showRestaurantPicker && filteredRestaurants.length > 0 && (
               <View style={styles.dropdown}>
-                <ScrollView nestedScrollEnabled keyboardShouldPersistTaps="handled">
+                <ScrollView 
+                  nestedScrollEnabled={true} 
+                  keyboardShouldPersistTaps="handled" 
+                  style={{ flex: 1 }}
+                >
                   {filteredRestaurants.map((item) => (
                     <Pressable
                       key={item}
                       style={styles.dropdownItem}
-                      onPress={() => {
-                        setRestaurant(item);
+                      onPressIn={() => {
+                        console.log("Selected:", item);
+                        setRestaurant(item); // Updates the 'value' in TextInput
                         setShowRestaurantPicker(false);
+                        Keyboard.dismiss(); // 5. Hide the keyboard
                       }}>
                       <Text style={styles.dropdownText}>{item}</Text>
                     </Pressable>
                   ))}
                 </ScrollView>
               </View>
-            ) : null}
+            )}
           </View>
 
           <View style={styles.row}>
@@ -350,7 +372,7 @@ export default function GroupsPanel({ style }) {
         </SurfaceCard>
       )}
 
-      <SectionTitle>{events.length > 0 ? 'Your invites' : 'Invite activity'}</SectionTitle>
+      <SectionTitle>{events.length > 0 ? 'Your Events' : 'Invite activity'}</SectionTitle>
 
       {events.length === 0 && !showForm ? (
         <EmptyState
@@ -402,7 +424,7 @@ export default function GroupsPanel({ style }) {
                     </>
                   ) : null} */}
 
-                  <Pressable style={styles.removeBtn} onPress={() => deleteInvite(event.event_id)}>
+                  <Pressable style={styles.removeBtn} onPress={() => deleteInvite(event)}>
                     <Text style={styles.removeText}>Delete</Text>
                   </Pressable>
                 </View>
@@ -499,16 +521,24 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   dropdown: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E8E2DA',
-    marginTop: 6,
-    maxHeight: 180,
-    overflow: 'hidden',
-    ...(Platform.OS === 'web'
-      ? { position: 'absolute', top: 54, left: 0, right: 0, zIndex: 10 }
-      : {}),
+  backgroundColor: '#FFFFFF',
+  borderRadius: 12,
+  borderWidth: 1,
+  borderColor: '#E8E2DA',
+  marginTop: 6,
+  
+  // 🟢 Updated logic for both Web and Native
+  position: 'absolute',
+  top: 54,
+  left: 0,
+  right: 0,
+  maxHeight: 200, // Important for scrolling!
+  
+  // 🟢 Stacking fix
+  zIndex: 1000,   // Works on iOS and Web
+  elevation: 5,   // 👈 ESSENTIAL for Android
+  
+  overflow: 'hidden', // Keeps the scroll view inside the rounded corners
   },
   dropdownItem: {
     padding: 12,
