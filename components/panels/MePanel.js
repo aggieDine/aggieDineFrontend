@@ -1,209 +1,172 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useEffect, useState } from 'react';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useState, useCallback } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 
 import { useAuth } from '../../auth/AuthContext';
-import { InfoBanner, SecondaryButton } from '../ui/action-controls';
-import { HeroHeader, SectionTitle, SurfaceCard } from '../ui/app-surface';
+import { InfoBanner } from '../ui/action-controls';
+import { HeroHeader } from '../ui/app-surface';
+import UserProfileCard from '../UserProfileCard';
+import SettingsPanel from './SettingsPanel';
 
-const DIETARY_OPTIONS = ['Vegetarian', 'Vegan', 'Halal', 'Kosher', 'Gluten-Free'];
-const ALLERGY_OPTIONS = ['Peanuts', 'Tree Nuts', 'Dairy', 'Eggs', 'Soy', 'Shellfish', 'Gluten'];
+const API_URL = 'https://nh19d71sp8.execute-api.us-east-2.amazonaws.com';
 
 export default function MePanel({ style }) {
-  const { user, signOut } = useAuth();
-  const [dietary, setDietary] = useState([]);
-  const [allergies, setAllergies] = useState([]);
+  const { idToken } = useAuth();
 
-  useEffect(() => {
-    loadSettings();
-  }, []);
+  const [profile, setProfile]         = useState(null);
+  const [followers, setFollowers]     = useState(null);
+  const [following, setFollowing]     = useState(null);
+  const [showSettings, setShowSettings] = useState(false);
 
-  const loadSettings = async () => {
+  const fetchProfile = useCallback(async () => {
+    if (!idToken) return;
     try {
-      const storedDietary = await AsyncStorage.getItem('userDietaryPreferences');
-      const storedAllergies = await AsyncStorage.getItem('userAllergySettings');
-      if (storedDietary) setDietary(JSON.parse(storedDietary));
-      if (storedAllergies) setAllergies(JSON.parse(storedAllergies));
+      const res = await fetch(`${API_URL}/users/me`, {
+        headers: { Authorization: `Bearer ${idToken}` },
+      });
+      if (res.ok) setProfile(await res.json());
     } catch (e) {
-      console.error('Failed to load user settings', e);
+      console.error('fetchProfile error:', e);
+    }
+  }, [idToken]);
+
+  useEffect(() => { fetchProfile(); }, [fetchProfile]);
+
+  const loadFollowers = async () => {
+    if (!profile || followers) return;
+    try {
+      const res = await fetch(`${API_URL}/users/${profile.user_id}/followers`, {
+        headers: { Authorization: `Bearer ${idToken}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setFollowers(data.users);
+      }
+    } catch (e) {
+      console.error('loadFollowers error:', e);
     }
   };
 
-  const saveSettings = async (key, value) => {
+  const loadFollowing = async () => {
+    if (!profile || following) return;
     try {
-      await AsyncStorage.setItem(key, JSON.stringify(value));
+      const res = await fetch(`${API_URL}/users/${profile.user_id}/following`, {
+        headers: { Authorization: `Bearer ${idToken}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setFollowing(data.users);
+      }
     } catch (e) {
-      console.error('Failed to save user settings', e);
+      console.error('loadFollowing error:', e);
     }
   };
-
-  const toggleDietary = (option) => {
-    const updated = dietary.includes(option)
-      ? dietary.filter((item) => item !== option)
-      : [...dietary, option];
-    setDietary(updated);
-    saveSettings('userDietaryPreferences', updated);
-  };
-
-  const toggleAllergy = (option) => {
-    const updated = allergies.includes(option)
-      ? allergies.filter((item) => item !== option)
-      : [...allergies, option];
-    setAllergies(updated);
-    saveSettings('userAllergySettings', updated);
-  };
-
-  // Mock profile picture or initials
-  const initials = user?.displayName
-    ? user.displayName.split(' ').map((n) => n[0]).join('').toUpperCase()
-    : '??';
 
   return (
     <View style={[styles.panel, style]}>
-      <HeroHeader
-        eyebrow="Profile"
-        title="Me"
-        subtitle="Manage your identity, dietary preferences, and dining safety settings."
-      />
-
-      <SurfaceCard style={styles.profileCard}>
-        <View style={styles.profileHeader}>
-          <View style={styles.avatar}>
-            {user?.photoURL ? (
-              <Image source={{ uri: user.photoURL }} style={styles.avatarImg} />
-            ) : (
-              <Text style={styles.avatarText}>{initials}</Text>
-            )}
-          </View>
-          <View style={styles.profileInfo}>
-            <Text style={styles.displayName}>{user?.displayName || 'Aggie Student'}</Text>
-            <Text style={styles.email}>{user?.email || 'aggie@tamu.edu'}</Text>
-          </View>
-          {signOut ? (
-            <SecondaryButton label="Sign out" onPress={signOut} style={styles.signOutButton} />
-          ) : null}
-        </View>
-      </SurfaceCard>
-
-      <InfoBanner
-        title="Dining Safety"
-        body="Set your dietary preferences and allergies here. We'll use these to highlight safe options and warn you about potential risks on campus."
-        style={styles.banner}
-      />
-
-      <SectionTitle>Dietary Practices</SectionTitle>
-      <View style={styles.chipsRow}>
-        {DIETARY_OPTIONS.map((option) => {
-          const selected = dietary.includes(option);
-          return (
-            <Pressable
-              key={option}
-              style={[styles.chip, selected && styles.chipActive]}
-              onPress={() => toggleDietary(option)}>
-              <Text style={[styles.chipText, selected && styles.chipTextActive]}>{option}</Text>
-            </Pressable>
-          );
-        })}
+      {/* Header row with settings icon */}
+      <View style={styles.headerRow}>
+        <HeroHeader
+          eyebrow="Profile"
+          title="Me"
+          subtitle="Your profile and dining preferences."
+          style={styles.hero}
+        />
+        <Pressable
+          style={styles.settingsBtn}
+          onPress={() => setShowSettings(true)}
+          hitSlop={12}
+        >
+          <Ionicons name="settings-outline" size={24} color="#500000" />
+        </Pressable>
       </View>
 
-      <SectionTitle style={styles.sectionMargin}>Allergies & Sensitivities</SectionTitle>
-      <View style={styles.chipsRow}>
-        {ALLERGY_OPTIONS.map((option) => {
-          const selected = allergies.includes(option);
-          return (
-            <Pressable
-              key={option}
-              style={[styles.chip, selected && styles.chipAllergyActive]}
-              onPress={() => toggleAllergy(option)}>
-              <Text style={[styles.chipText, selected && styles.chipTextActive]}>{option}</Text>
-            </Pressable>
-          );
-        })}
-      </View>
+      {/* Profile card */}
+      <UserProfileCard
+        profile={profile}
+        isCurrentUser
+        idToken={idToken}
+        followers={followers}
+        following={following}
+        onLoadFollowers={loadFollowers}
+        onLoadFollowing={loadFollowing}
+      />
+
+      {/* Dietary summary */}
+      {profile?.dietary_preferences?.length > 0 && (
+        <>
+          <Text style={styles.summaryLabel}>Dietary Practices</Text>
+          <View style={styles.chips}>
+            {profile.dietary_preferences.map(opt => (
+              <View key={opt} style={[styles.chip, styles.chipDiet]}>
+                <Text style={styles.chipText}>{opt}</Text>
+              </View>
+            ))}
+          </View>
+        </>
+      )}
+
+      {profile?.allergens?.length > 0 && (
+        <>
+          <Text style={styles.summaryLabel}>Allergens</Text>
+          <View style={styles.chips}>
+            {profile.allergens.map(opt => (
+              <View key={opt} style={[styles.chip, styles.chipAllergy]}>
+                <Text style={styles.chipText}>{opt}</Text>
+              </View>
+            ))}
+          </View>
+        </>
+      )}
+
+      {!profile?.dietary_preferences?.length && !profile?.allergens?.length && (
+        <InfoBanner
+          title="Set your preferences"
+          body="Tap the settings icon to set your dietary practices and allergens — we'll use these to highlight safe menu options."
+        />
+      )}
+
+      {/* Settings modal */}
+      <SettingsPanel
+        visible={showSettings}
+        onClose={() => setShowSettings(false)}
+        profile={profile}
+        onProfileUpdated={(updated) => {
+          setProfile(updated);
+          // Reset cached lists so they reload with fresh data
+          setFollowers(null);
+          setFollowing(null);
+        }}
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  panel: {
-    width: '100%',
-  },
-  signOutButton: {
-    minWidth: 100,
-  },
-  profileCard: {
-    marginBottom: 20,
-  },
-  profileHeader: {
+  panel: { width: '100%' },
+
+  headerRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
   },
-  avatar: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: '#500000',
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
+  hero:        { flex: 1 },
+  settingsBtn: { padding: 4, marginTop: 8 },
+
+  summaryLabel: {
+    fontSize: 12, fontWeight: '700', color: '#500000',
+    textTransform: 'uppercase', letterSpacing: 0.5,
+    marginTop: 20, marginBottom: 10,
   },
-  avatarImg: {
-    width: '100%',
-    height: '100%',
-  },
-  avatarText: {
-    color: '#FFFFFF',
-    fontSize: 24,
-    fontWeight: '800',
-  },
-  profileInfo: {
-    flex: 1,
-    gap: 4,
-  },
-  displayName: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#2B2320',
-  },
-  email: {
-    fontSize: 14,
-    color: '#6F6A66',
-  },
-  banner: {
-    marginBottom: 24,
-  },
-  sectionMargin: {
-    marginTop: 28,
-  },
-  chipsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-    marginTop: 4,
-  },
+  chips:        { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: {
-    paddingVertical: 10,
-    paddingHorizontal: 16,
+    paddingVertical: 8, paddingHorizontal: 14,
     borderRadius: 999,
-    backgroundColor: '#F0ECE6',
-    borderWidth: 1,
-    borderColor: '#E0D9CF',
   },
-  chipActive: {
-    backgroundColor: '#22A45D',
-    borderColor: '#22A45D',
-  },
-  chipAllergyActive: {
-    backgroundColor: '#D64545',
-    borderColor: '#D64545',
-  },
+  chipDiet:    { backgroundColor: '#DCFCE7' },
+  chipAllergy: { backgroundColor: '#FEE2E2' },
   chipText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#6F6A66',
-  },
-  chipTextActive: {
-    color: '#FFFFFF',
+    fontSize: 13, fontWeight: '700',
+    color: '#374151',
   },
 });

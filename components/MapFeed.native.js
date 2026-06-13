@@ -11,6 +11,7 @@ import {
   Text,
   useWindowDimensions,
   View,
+  Keyboard
 } from 'react-native';
 import MapView, { Marker } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -18,6 +19,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import GroupsPanel from './panels/GroupsPanel';
 import MePanel from './panels/MePanel';
 import ScheduleEditorPanel from './panels/ScheduleEditorPanel';
+
+import { useEvents } from '../data/EventsContext';
+import { useAuth } from '../auth/AuthContext';
 
 const MODE_OPTIONS = [
   { value: 'schedule', label: 'Before Class' },
@@ -144,12 +148,28 @@ export default function MapFeed({
   const [activePageIndex, setActivePageIndex] = useState(0);
   const [groupInvites, setGroupInvites] = useState([]);
   const [isSheetLow, setIsSheetLow] = useState(false);
+  // const [isKeyboardVisible, setKeyboardVisible] = useState(false);
 
   const bottomOffset = Math.max(insets.bottom, 10) + 12;
-  const sheetHeight = Math.min(Math.max(height * 0.68, 320), 520);
+  const sheetHeight = Math.min(Math.max(height * 0.80, 320), 700);
   const pagerWidth = useWindowDimensions().width - 24; // sheet left+right inset
-  const collapsedVisible = 86;
+  const collapsedVisible = 80;
   const mediumVisible = Math.min(Math.max(sheetHeight * 0.48, 250), 340);
+
+  // Events 
+  const { events } = useEvents();
+  const { user } = useAuth();
+  const currentUserId = user?.sub || user?.uid;
+
+  // Filter events to only those at the selected hall
+  const locationEvents = useMemo(() => {
+    if (!selectedHall) return [];
+    const hallName = selectedHall.name?.toLowerCase() ?? '';
+    return events.filter(e =>
+      e.location?.toLowerCase().includes(hallName) ||
+      hallName.includes(e.location?.toLowerCase() ?? '')
+    );
+  }, [events, selectedHall]);
 
   const detents = useMemo(
     () => ({
@@ -201,6 +221,7 @@ export default function MapFeed({
       console.error('Failed to load group invites for map markers', error);
     }
   }, []);
+
 
   const saveGroupInvites = useCallback(async (updatedInvites) => {
     try {
@@ -401,34 +422,13 @@ export default function MapFeed({
         )
       )
       : null;
-  const focusedDetailCopy =
-    activePageIndex === MY_DAY_PAGE_INDEX
-      ? getSheetCopy({
-        selectedHall,
-        suggestion,
-        nextClass,
-        recommendationMode: 'schedule',
-      })
-      : activePageIndex === SOCIAL_PAGE_INDEX
-        ? {
-          eyebrow: selectedHallHasActiveInvite ? 'Active Invite Spot' : 'Social Spot',
-          title: selectedHall?.name ?? 'Dining Spot',
-          body: selectedHallHasActiveInvite
-            ? 'This dining spot is tied to active invite activity.'
-            : 'Viewing details for a dining spot you can use for group plans.',
-        }
-        : activePageIndex === ME_PAGE_INDEX
-          ? {
-            eyebrow: 'Selected Place',
-            title: selectedHall?.name ?? 'Dining Spot',
-            body: 'Viewing details for this dining spot from your personal map.',
-          }
-          : getSheetCopy({
-            selectedHall,
-            suggestion,
-            nextClass,
-            recommendationMode: 'location',
-          });
+  const focusedDetailCopy = {
+    eyebrow: 'Selected Place',
+    title:   selectedHall?.name ?? 'Dining Spot',
+    body:    activeDistance
+      ? `${activeDistance} · Tap View Menu to see today's offerings.`
+      : 'Tap View Menu to see today\'s offerings.',
+  };
 
   const recenterOnUser = () => {
     if (!userLocation || !mapRef.current) return;
@@ -444,6 +444,7 @@ export default function MapFeed({
     );
   };
 
+  // Change sheet size mechanics??
   const minimizeSheet = useCallback(() => {
     snapTo('collapsed');
   }, [snapTo]);
@@ -484,6 +485,23 @@ export default function MapFeed({
   const openDetail = useCallback((hall) => {
     router.push(`/restaurant/${hall.id}`);
   }, [router]);
+
+  // useEffect(() => {
+  //   const keyboardDidShowListener = Keyboard.addListener('keyboardDidShow', () => {
+  //     setKeyboardVisible(true);
+  //   });
+  //   const keyboardDidHideListener = Keyboard.addListener('keyboardDidHide', () => {
+  //     setKeyboardVisible(false);
+  //   });
+
+  //   return () => {
+  //     keyboardDidShowListener.remove();
+  //     keyboardDidHideListener.remove();
+  //   };
+  // }, []);
+
+
+
 
   return (
     <View style={styles.container}>
@@ -544,7 +562,7 @@ export default function MapFeed({
       </MapView>
 
       {userLocation ? (
-        <Pressable style={styles.recenterButton} onPress={recenterOnUser}>
+        <Pressable style={[styles.recenterButton, { top: insets.top - 10}]} onPress={recenterOnUser}>
           <Ionicons name="locate" size={20} color="#3F3A37" />
         </Pressable>
       ) : null}
@@ -607,12 +625,15 @@ export default function MapFeed({
               contentContainerStyle={styles.focusedSheetContent}
               showsVerticalScrollIndicator={false}
               nestedScrollEnabled>
+
+              {/* Hero */}
               <View style={styles.heroBlock}>
                 <Text style={styles.eyebrow}>{focusedDetailCopy.eyebrow}</Text>
                 <Text style={styles.title}>{focusedDetailCopy.title}</Text>
                 <Text style={styles.body}>{focusedDetailCopy.body}</Text>
               </View>
 
+              {/* Primary card */}
               <View style={styles.focusedPrimaryCard}>
                 <View style={styles.primaryHeader}>
                   <View style={styles.primaryTitleWrap}>
@@ -633,87 +654,117 @@ export default function MapFeed({
                   </View>
                 ) : null}
 
-                {activePageIndex === MY_DAY_PAGE_INDEX && nextClass ? (
-                  <View style={styles.infoRow}>
-                    <Ionicons name="school-outline" size={16} color="#7A6E69" />
-                    <Text style={styles.infoText}>Planning around {nextClass.building}</Text>
-                  </View>
-                ) : activePageIndex === SOCIAL_PAGE_INDEX ? (
-                  <View style={styles.infoRow}>
-                    <Ionicons name="people-outline" size={16} color="#7A6E69" />
-                    <Text style={styles.infoText}>
-                      {selectedHallHasActiveInvite
-                        ? 'This spot has active invite activity.'
-                        : 'Open for future group invites.'}
-                    </Text>
-                  </View>
-                ) : activePageIndex === ME_PAGE_INDEX ? (
-                  <View style={styles.infoRow}>
-                    <Ionicons name="person-outline" size={16} color="#7A6E69" />
-                    <Text style={styles.infoText}>Viewing this spot from your personal dining view.</Text>
-                  </View>
-                ) : (
-                  <View style={styles.infoRow}>
-                    <Ionicons name="locate-outline" size={16} color="#7A6E69" />
-                    <Text style={styles.infoText}>Anchored to your live location</Text>
-                  </View>
-                )}
-
-                <Pressable
-                  style={styles.menuButton}
-                  onPress={() => openDetail(selectedHall)}>
+                <Pressable style={styles.menuButton} onPress={() => openDetail(selectedHall)}>
                   <Text style={styles.menuButtonText}>View Menu</Text>
                 </Pressable>
               </View>
 
-              {selectedHallInvites.length > 0 ? (
-                <View style={styles.inviteCard}>
-                  <View style={styles.inviteHeader}>
-                    <Text style={styles.inviteEyebrow}>Invite Activity</Text>
-                    <View style={styles.inviteCountBadge}>
-                      <Text style={styles.inviteCountBadgeText}>{selectedHallInvites.length} active</Text>
+              {/* Events at this location */}
+              <View style={styles.eventsSection}>
+                <View style={styles.eventsSectionHeader}>
+                  <Text style={styles.sectionTitle}>Events Here</Text>
+                  {locationEvents.length > 0 && (
+                    <View style={styles.eventCountBadge}>
+                      <Text style={styles.eventCountBadgeText}>{locationEvents.length}</Text>
                     </View>
-                  </View>
-
-                  <View style={styles.inviteList}>
-                    {selectedHallInvites.map((invite) => (
-                      <View key={invite.id} style={styles.inviteRow}>
-                        <View style={styles.inviteTopLine}>
-                          <Text style={styles.inviteName}>{invite.friendName || 'Open Invite'}</Text>
-                          <View style={styles.inviteStatusBadge}>
-                            <Text style={styles.inviteStatusText}>{formatInviteStatus(invite.status)}</Text>
-                          </View>
-                        </View>
-                        <Text style={styles.inviteMeta}>
-                          {invite.date || 'TBD'} | {invite.time || 'TBD'}
-                        </Text>
-                        {invite.message ? (
-                          <Text style={styles.inviteMessage}>{invite.message}</Text>
-                        ) : null}
-                        {invite.status === 'pending' ? (
-                          <View style={styles.inviteActions}>
-                            <Pressable
-                              style={styles.acceptInviteButton}
-                              onPress={() => updateInviteStatus(invite.id, 'accepted')}>
-                              <Text style={styles.acceptInviteButtonText}>Accept</Text>
-                            </Pressable>
-                            <Pressable
-                              style={styles.declineInviteButton}
-                              onPress={() => updateInviteStatus(invite.id, 'declined')}>
-                              <Text style={styles.declineInviteButtonText}>Decline</Text>
-                            </Pressable>
-                          </View>
-                        ) : null}
-                      </View>
-                    ))}
-                  </View>
+                  )}
                 </View>
-              ) : null}
+
+                {locationEvents.length === 0 ? (
+                  <View style={styles.emptyEvents}>
+                    <Ionicons name="calendar-outline" size={28} color="#C4B8B2" />
+                    <Text style={styles.emptyEventsText}>No upcoming events here</Text>
+                    <Text style={styles.emptyEventsCaption}>
+                      Create one in the Social tab to eat with friends
+                    </Text>
+                  </View>
+                ) : (
+                  <View style={styles.eventsList}>
+                    {locationEvents.map(event => {
+                      const date     = new Date(event.time);
+                      const dateStr  = `${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getDate().toString().padStart(2, '0')}`;
+                      const timeStr  = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+                      const isCreator = event.created_by === currentUserId;
+                      const isInvited = event.invited_users?.includes(currentUserId);
+                      const myStatus  = event.invite_statuses?.find(s => s.user_id === currentUserId)?.status;
+                      const isPending = myStatus === 'pending';
+                      const guestCount = event.invited_users?.length ?? 0;
+                      const acceptedCount = event.invite_statuses?.filter(s => s.status === 'accepted').length ?? 0;
+
+                      return (
+                        <View key={event.event_id} style={styles.eventRow}>
+                          {/* Top row */}
+                          <View style={styles.eventTopRow}>
+                            <View style={styles.eventTimeBlock}>
+                              <Text style={styles.eventDate}>{dateStr}</Text>
+                              <Text style={styles.eventTime}>{timeStr}</Text>
+                            </View>
+                            <View style={styles.eventMeta}>
+                              {isCreator && (
+                                <View style={styles.hostPill}>
+                                  <Text style={styles.hostPillText}>Host</Text>
+                                </View>
+                              )}
+                              {event.is_private && (
+                                <View style={styles.privatePill}>
+                                  <Text style={styles.privatePillText}>Private</Text>
+                                </View>
+                              )}
+                              {isInvited && !isCreator && myStatus && (
+                                <View style={[
+                                  styles.statusPill,
+                                  myStatus === 'accepted' && styles.statusPillAccepted,
+                                  myStatus === 'declined' && styles.statusPillDeclined,
+                                ]}>
+                                  <Text style={[
+                                    styles.statusPillText,
+                                    myStatus === 'accepted' && styles.statusPillTextAccepted,
+                                    myStatus === 'declined' && styles.statusPillTextDeclined,
+                                  ]}>
+                                    {myStatus.charAt(0).toUpperCase() + myStatus.slice(1)}
+                                  </Text>
+                                </View>
+                              )}
+                            </View>
+                          </View>
+
+                          {/* Guest info */}
+                          {guestCount > 0 && (
+                            <View style={styles.infoRow}>
+                              <Ionicons name="people-outline" size={14} color="#7A6E69" />
+                              <Text style={styles.infoText}>
+                                {acceptedCount}/{guestCount} going
+                              </Text>
+                            </View>
+                          )}
+
+                          {/* Accept/decline for pending invites */}
+                          {isInvited && !isCreator && isPending && (
+                            <View style={styles.inviteActions}>
+                              <Pressable
+                                style={styles.acceptInviteButton}
+                                onPress={() => updateInviteStatus(event.event_id, 'accepted')}>
+                                <Text style={styles.acceptInviteButtonText}>Accept</Text>
+                              </Pressable>
+                              <Pressable
+                                style={styles.declineInviteButton}
+                                onPress={() => updateInviteStatus(event.event_id, 'declined')}>
+                                <Text style={styles.declineInviteButtonText}>Decline</Text>
+                              </Pressable>
+                            </View>
+                          )}
+                        </View>
+                      );
+                    })}
+                  </View>
+                )}
+              </View>
             </ScrollView>
           ) : (
             <ScrollView
               ref={pagerRef}
               horizontal
+              // scrollEnabled={!isKeyboardVisible}
               pagingEnabled
               showsHorizontalScrollIndicator={false}
               onMomentumScrollEnd={(e) => {
@@ -879,6 +930,7 @@ export default function MapFeed({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    
   },
   map: {
     width: '100%',
@@ -935,8 +987,8 @@ const styles = StyleSheet.create({
   },
   recenterButton: {
     position: 'absolute',
+    zIndex: 10,
     right: 18,
-    top: 22,
     width: 46,
     height: 46,
     borderRadius: 23,
@@ -959,14 +1011,15 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.88)',
   },
   sheetGrabZone: {
-    paddingTop: 10,
+    paddingTop: 5,
     paddingBottom: 6,
     paddingHorizontal: 18,
     backgroundColor: 'rgba(248,245,240,0.96)',
   },
   grabberWrap: {
     alignItems: 'center',
-    paddingBottom: 10,
+    paddingBottom: 15,
+    paddingTop: 5,
   },
   grabber: {
     width: 42,
@@ -1351,4 +1404,114 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#7A4333',
   },
+  eventsSection: {
+  gap: 12,
+},
+eventsSectionHeader: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  gap: 10,
+},
+eventCountBadge: {
+  backgroundColor: '#500000',
+  borderRadius: 999,
+  minWidth: 22,
+  height: 22,
+  alignItems: 'center',
+  justifyContent: 'center',
+  paddingHorizontal: 6,
+},
+eventCountBadgeText: {
+  color: '#FFFFFF',
+  fontSize: 11,
+  fontWeight: '800',
+},
+emptyEvents: {
+  backgroundColor: '#FFFFFF',
+  borderRadius: 20,
+  padding: 24,
+  alignItems: 'center',
+  gap: 8,
+  borderWidth: 1,
+  borderColor: '#EFE6DE',
+},
+emptyEventsText: {
+  fontSize: 15,
+  fontWeight: '700',
+  color: '#4A3F3A',
+},
+emptyEventsCaption: {
+  fontSize: 13,
+  color: '#7A6E69',
+  textAlign: 'center',
+  lineHeight: 18,
+},
+eventsList: {
+  gap: 10,
+},
+eventRow: {
+  backgroundColor: '#FFFFFF',
+  borderRadius: 20,
+  padding: 16,
+  gap: 10,
+  borderWidth: 1,
+  borderColor: '#EFE6DE',
+},
+eventTopRow: {
+  flexDirection: 'row',
+  justifyContent: 'space-between',
+  alignItems: 'flex-start',
+},
+eventTimeBlock: {
+  gap: 2,
+},
+eventDate: {
+  fontSize: 12,
+  color: '#8A7B74',
+  fontWeight: '600',
+},
+eventTime: {
+  fontSize: 17,
+  fontWeight: '800',
+  color: '#241C1A',
+},
+eventMeta: {
+  flexDirection: 'row',
+  gap: 6,
+  flexWrap: 'wrap',
+  justifyContent: 'flex-end',
+},
+hostPill: {
+  backgroundColor: '#EDE9FE',
+  paddingHorizontal: 10,
+  paddingVertical: 4,
+  borderRadius: 999,
+},
+hostPillText: {
+  fontSize: 11,
+  fontWeight: '700',
+  color: '#5B21B6',
+},
+privatePill: {
+  backgroundColor: '#FEF3C7',
+  paddingHorizontal: 10,
+  paddingVertical: 4,
+  borderRadius: 999,
+},
+privatePillText: {
+  fontSize: 11,
+  fontWeight: '700',
+  color: '#92400E',
+},
+statusPill: {
+  backgroundColor: '#FFFBEB',
+  paddingHorizontal: 10,
+  paddingVertical: 4,
+  borderRadius: 999,
+},
+statusPillAccepted:     { backgroundColor: '#F0FDF4' },
+statusPillDeclined:     { backgroundColor: '#FEF2F2' },
+statusPillText:         { fontSize: 11, fontWeight: '700', color: '#92400E' },
+statusPillTextAccepted: { color: '#16A34A' },
+statusPillTextDeclined: { color: '#DC2626' }
 });

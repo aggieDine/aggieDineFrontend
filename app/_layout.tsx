@@ -4,6 +4,7 @@ import { DiningDataProvider } from '../data/DiningDataContext';
 import { useEffect, useState } from 'react';
 import { View, ActivityIndicator, Platform } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 // ==========================================
 // 🆕 NEW IMPORTS FOR FCM & EVENTS
@@ -140,13 +141,15 @@ function RootLayoutNav() {
 
 export default function RootLayout() {
   return (
-    <AuthProvider>
-      <DiningDataProvider>
-        {/* 🆕 NEW: Added EventsProvider to wrap your app for Fetch on Focus */}
-        <EventsProvider>
-          <RootLayoutNav />
-        </EventsProvider>
-      </DiningDataProvider>
-    </AuthProvider>
+    <SafeAreaProvider>
+      <AuthProvider>
+        <DiningDataProvider>
+          {/* 🆕 NEW: Added EventsProvider to wrap your app for Fetch on Focus */}
+          <EventsProvider>
+            <RootLayoutNav />
+          </EventsProvider>
+        </DiningDataProvider>
+      </AuthProvider>
+    </SafeAreaProvider>
   );
 }
